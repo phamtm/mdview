@@ -91,8 +91,12 @@ import DOMPurify from "dompurify";
   /** Split a leading `---` (YAML) or `+++` (TOML) block off the document. */
   function splitFrontmatter(text) {
     const match = /^\uFEFF?(---|\+\+\+)[ \t]*\r?\n([\s\S]*?)\r?\n?\1[ \t]*(?:\r?\n|$)/.exec(text);
-    if (!match) return { fields: [], body: text };
-    return { fields: parseFields(match[2]), body: text.slice(match[0].length) };
+    if (!match) return { fields: [], body: text, raw: "" };
+    return {
+      fields: parseFields(match[2]),
+      body: text.slice(match[0].length),
+      raw: match[0].trimEnd(),
+    };
   }
 
   function unquote(value) {
@@ -137,7 +141,14 @@ import DOMPurify from "dompurify";
     return fields;
   }
 
-  /** Builds the header shown above the document. Values are set as text, never HTML. */
+  const DOCUMENT_FIELDS = ["title", "subtitle"];
+
+  /**
+   * Builds the header shown above the document: the title, and a subtitle if
+   * there is one. The remaining fields go to the titlebar disclosure — showing
+   * them in both places at once just duplicates the metadata.
+   * Values are set as text, never HTML.
+   */
   function frontmatterHeader(fields, firstBodyHeading) {
     const header = document.createElement("header");
     header.className = "frontmatter";
@@ -157,27 +168,17 @@ import DOMPurify from "dompurify";
       rest.splice(titleIndex, 1);
     }
 
-    if (rest.length) {
-      const list = document.createElement("dl");
-      list.className = "fm-fields";
-      for (const [key, value] of rest) {
-        const dt = document.createElement("dt");
-        dt.textContent = key;
-        const dd = document.createElement("dd");
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            const pill = document.createElement("span");
-            pill.className = "fm-pill";
-            pill.textContent = item;
-            dd.appendChild(pill);
-          }
-        } else {
-          dd.textContent = value;
-        }
-        list.appendChild(dt);
-        list.appendChild(dd);
+    const subtitleIndex = rest.findIndex(([key]) => key.toLowerCase() === "subtitle");
+    if (subtitleIndex >= 0) {
+      const [, value] = rest[subtitleIndex];
+      const text = Array.isArray(value) ? value.join(", ") : value;
+      if (text) {
+        const line = document.createElement("p");
+        line.className = "fm-subtitle";
+        line.textContent = text;
+        header.appendChild(line);
       }
-      header.appendChild(list);
+      rest.splice(subtitleIndex, 1);
     }
 
     return header.childElementCount ? header : null;
@@ -563,6 +564,21 @@ import DOMPurify from "dompurify";
       const header = frontmatterHeader(split.fields, firstHeading && firstHeading.textContent);
       if (header) elDoc.insertBefore(header, elDoc.firstChild);
     }
+
+    // The titlebar disclosure is drawn by Swift, but the parser lives here —
+    // duplicating it there would be two implementations to keep in step.
+    post({
+      action: "frontmatter",
+      raw: split.raw,
+      // Title and subtitle are already on the page as the document's own head.
+      fields: split.fields
+        .filter(([name]) => !DOCUMENT_FIELDS.includes(name.toLowerCase()))
+        .map(([name, value]) => ({
+          name,
+          values: Array.isArray(value) ? value : [value],
+          isList: Array.isArray(value),
+        })),
+    });
 
     addHeadingAnchors(elDoc);
     decorateAlerts(elDoc);

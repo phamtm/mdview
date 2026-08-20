@@ -17,6 +17,7 @@ extension Notification.Name {
     static let mdvOpenSettings = Notification.Name("mdv.openSettings")
     /// Asks the page to report what it actually rendered; see tools/check-theme.sh.
     static let mdvDumpPage = Notification.Name("mdv.dumpPage")
+    static let mdvToggleFrontmatter = Notification.Name("mdv.toggleFrontmatter")
 }
 
 /// WKWebView that accepts dropped markdown files instead of letting WebKit
@@ -202,6 +203,17 @@ struct ViewerWebView: NSViewRepresentable {
             switch action {
             case "openPanel":
                 doc.openPanel()
+            case "frontmatter":
+                let fields = (body["fields"] as? [[String: Any]] ?? []).compactMap {
+                    entry -> Frontmatter.Field? in
+                    guard let name = entry["name"] as? String else { return nil }
+                    return Frontmatter.Field(
+                        name: name,
+                        values: entry["values"] as? [String] ?? [],
+                        isList: entry["isList"] as? Bool ?? false
+                    )
+                }
+                doc.frontmatter = Frontmatter(fields: fields, raw: body["raw"] as? String ?? "")
             case "copyText":
                 if let text = body["text"] as? String {
                     NSPasteboard.general.clearContents()

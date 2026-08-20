@@ -669,6 +669,14 @@ body {
   margin: 0 0 var(--space-2);
 }
 
+.prose .fm-subtitle {
+  font-style: italic;
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0 0 var(--space-4);
+  text-align: left;
+}
+
 .prose .fm-fields {
   display: grid;
   grid-template-columns: auto 1fr;

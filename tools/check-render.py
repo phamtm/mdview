@@ -16,9 +16,10 @@ EXPECT = {
     "scriptTagsInDoc": lambda v: v == 0,
     "onerrorAttrs": lambda v: v == 0,
     "pwned": lambda v: v is False,
-    # frontmatter
-    "frontmatterFields": lambda v: v == 5,          # subtitle, date, status, tags, authors
-    "frontmatterPills": lambda v: v == 4,           # 3 tags + 1 author
+    # frontmatter: the document carries title and subtitle, the titlebar
+    # disclosure carries the rest, so nothing is shown in two places
+    "frontmatterFields": lambda v: v == 0,
+    "frontmatterPills": lambda v: v == 0,
     "rawFrontmatterLeaked": lambda v: v is False,
     # GFM extras
     "alerts": lambda v: v == 5,
@@ -60,11 +61,14 @@ for path in sys.argv[1:]:
         print(f"  FAIL {path}: theme not applied — asked {expected_theme}, "
               f"page has {data.get('appliedTheme')!r}")
         failed = True
+    if data.get("frontmatterSubtitle") != "A small, local Markdown viewer for macOS":
+        print(f"  FAIL {path}: subtitle = {data.get('frontmatterSubtitle')!r}")
+        failed = True
     if data.get("frontmatterTitle") != "MDView":
         print(f"  FAIL {path}: frontmatter title = {data.get('frontmatterTitle')!r}")
         failed = True
     print(f"  ok   {path}: markdown, code, tables, tasks, diagram, image, sanitiser,")
-    print(f"       frontmatter ({data.get('frontmatterFields')} fields), "
+    print(f"       frontmatter (title + subtitle in doc, fields in titlebar), "
           f"alerts ({data.get('alertKinds')}), footnotes, autolinks")
 
 print("RENDER TESTS FAILED" if failed else "RENDER TESTS PASSED")

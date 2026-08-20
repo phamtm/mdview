@@ -89,6 +89,13 @@ MainActor.assumeIsolated {
     workspace.add(reference)
     DocumentModel.shared.open(readme)
 
+    // Set MDVIEW_FRONTMATTER=1 to capture the frontmatter disclosure open.
+    if ProcessInfo.processInfo.environment["MDVIEW_FRONTMATTER"] == "1" {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            NotificationCenter.default.post(name: .mdvToggleFrontmatter, object: nil)
+        }
+    }
+
     // Set MDVIEW_SETTINGS=1 to capture the settings panel open.
     if ProcessInfo.processInfo.environment["MDVIEW_SETTINGS"] == "1" {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -150,7 +157,9 @@ MainActor.assumeIsolated {
 
         // The settings panel is centred, so it sits inside the web view's rect —
         // compositing the document over it would hide the thing being captured.
-        if ProcessInfo.processInfo.environment["MDVIEW_SETTINGS"] == "1" {
+        if ProcessInfo.processInfo.environment["MDVIEW_SETTINGS"] == "1"
+            || ProcessInfo.processInfo.environment["MDVIEW_FRONTMATTER"] == "1"
+        {
             write(composed)
             app.terminate(nil)
             return

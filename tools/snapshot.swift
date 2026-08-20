@@ -90,6 +90,7 @@ final class Runner: NSObject, WKNavigationDelegate {
               appliedTheme: document.documentElement.dataset.theme || 'system',
               frontmatterTitle: (document.querySelector('#doc .fm-title') || {}).textContent || 'none',
               frontmatterFields: document.querySelectorAll('#doc .fm-fields dt').length,
+              frontmatterSubtitle: (document.querySelector('#doc .fm-subtitle') || {}).textContent || 'none',
               frontmatterPills: document.querySelectorAll('#doc .fm-pill').length,
               rawFrontmatterLeaked: /status: draft/.test(document.getElementById('doc').textContent),
               alerts: document.querySelectorAll('#doc blockquote.alert').length,

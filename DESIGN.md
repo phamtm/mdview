@@ -94,14 +94,24 @@ Document surface in all three themes, text sizes, the editorial column, code
 figures with caption bars, syntax colours, diagram treatment, frontmatter block,
 alerts, footnotes, find bar. Chrome: the titlebar band with document name and word
 count, the library sidebar with search, file badges, gold selection and a counted
-footer.
+footer, the settings panel with self-previewing theme swatches, and the frontmatter
+disclosure.
+
+## Frontmatter, and where it is shown
+
+Split deliberately, so nothing appears twice:
+
+- **The document** carries `title` as its display head and `subtitle` as an italic
+  line beneath it.
+- **The titlebar disclosure** (`⌘I`, or click the document's name) carries every
+  other field — rows with hairlines, list values as outlined pills, and a Raw view
+  of the block exactly as it appears in the file.
+
+The page parses the block and posts the fields to Swift. Swift does not parse
+frontmatter at all: a second parser is a second thing to keep in step.
 
 ## Not yet built
 
 - **The contents rail** — tick marks down the left of the document that swell on
   hover, a preview card, expansion after a dwell, a pin. Belongs in the page: it
   needs heading positions.
-- **The settings sheet** — theme swatches and a size segmented control. These are
-  menu items for now.
-- **Frontmatter as a titlebar disclosure** (`⌘I`) — rendered in the document
-  instead. Needs the parsed fields passed from the page back to Swift.

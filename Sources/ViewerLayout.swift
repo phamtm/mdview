@@ -13,6 +13,8 @@ struct ViewerView: View {
     @AppStorage("theme") private var themeName = AppTheme.system.rawValue
     @AppStorage("size") private var sizeName = "regular"
     @State private var showSettings = false
+    @State private var showFrontmatter = false
+    @State private var frontmatterRaw = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
@@ -30,10 +32,14 @@ struct ViewerView: View {
                 meta: documentMeta,
                 sidebarWidth: sidebarVisible ? storedWidth : 120,
                 sidebarVisible: sidebarVisible,
+                frontmatter: doc.frontmatter,
+                showingFrontmatter: $showFrontmatter,
+                frontmatterRaw: $frontmatterRaw,
                 palette: palette,
                 toggleSidebar: toggleSidebar,
                 openSettings: { showSettings = true }
             )
+            .zIndex(2)
 
             HStack(spacing: 0) {
                 if sidebarVisible {
@@ -52,6 +58,26 @@ struct ViewerView: View {
             }
         }
         .background(palette.bg)
+        .overlay(alignment: .top) {
+            if showFrontmatter, !doc.frontmatter.isEmpty {
+                ZStack(alignment: .top) {
+                    // Clicking anywhere else dismisses it, as in the design.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { showFrontmatter = false }
+                    FrontmatterPanel(
+                        frontmatter: doc.frontmatter,
+                        showingRaw: $frontmatterRaw,
+                        palette: palette
+                    )
+                    .padding(.top, ViewerView.titlebarHeight + 6)
+                    // The title is centred in the space right of the sidebar.
+                    .offset(x: (sidebarVisible ? storedWidth : 120) / 2)
+                    .onExitCommand { showFrontmatter = false }
+                }
+                .transition(.opacity)
+            }
+        }
         .overlay {
             if showSettings {
                 SettingsSheet(
@@ -71,6 +97,11 @@ struct ViewerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mdvOpenSettings)) { _ in
             showSettings = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvToggleFrontmatter)) { _ in
+            guard !doc.frontmatter.isEmpty else { return }
+            showFrontmatter.toggle()
+        }
+        .onChange(of: doc.url) { _, _ in showFrontmatter = false }
         // The titlebar is transparent, so content owns the whole window frame.
         .ignoresSafeArea()
         // No focus rings on any control: this is a reading window, and SwiftUI
@@ -151,10 +182,14 @@ struct ViewerView: View {
 /// toggle sit left of it, the document's name and word count centred right of
 /// it. No filename in the real titlebar — that is hidden, so this is it.
 struct TitleBar: View {
+    @State private var hoveringTitle = false
     let name: String?
     let meta: String
     let sidebarWidth: CGFloat
     let sidebarVisible: Bool
+    let frontmatter: Frontmatter
+    @Binding var showingFrontmatter: Bool
+    @Binding var frontmatterRaw: Bool
     let palette: Palette
     let toggleSidebar: () -> Void
     let openSettings: () -> Void
@@ -188,25 +223,48 @@ struct TitleBar: View {
         }
     }
 
+    /// Clickable when the document has frontmatter, and then it carries a caret
+    /// and hangs the disclosure beneath itself.
     private var documentLabel: some View {
-        VStack(spacing: 1) {
+        let hasFrontmatter = !frontmatter.isEmpty
+        return VStack(spacing: 1) {
             Text(name ?? "No document")
                 .font(Typeface.display(13))
                 .tracking(0.13)
                 .foregroundStyle(palette.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if !meta.isEmpty {
-                Text(meta)
-                    .font(Typeface.text(10))
-                    .tracking(0.9)
-                    .textCase(.uppercase)
-                    .foregroundStyle(palette.muted)
-                    .lineLimit(1)
+            HStack(spacing: 5) {
+                if !meta.isEmpty {
+                    Text(meta)
+                        .font(Typeface.text(10))
+                        .tracking(0.9)
+                        .textCase(.uppercase)
+                        .lineLimit(1)
+                }
+                if hasFrontmatter {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .semibold))
+                        .rotationEffect(.degrees(showingFrontmatter ? 180 : 0))
+                        .opacity(0.7)
+                }
             }
+            .foregroundStyle(showingFrontmatter ? palette.accentText : palette.muted)
         }
-        .frame(maxWidth: .infinity)
         .padding(.horizontal, 13.8)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(palette.accent.opacity(hoveringTitle && hasFrontmatter ? 0.10 : 0))
+        )
+        .contentShape(Rectangle())
+        .onHover { hoveringTitle = $0 }
+        .onTapGesture {
+            guard hasFrontmatter else { return }
+            showingFrontmatter.toggle()
+        }
+        .help(hasFrontmatter ? "Front matter (⌘I)" : "")
     }
 }
 

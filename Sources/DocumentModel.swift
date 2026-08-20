@@ -4,6 +4,24 @@ import UniformTypeIdentifiers
 
 /// Holds the markdown file currently on screen, reloads it when it changes on
 /// disk, and remembers the files opened recently.
+/// A document's frontmatter, as the page parsed it.
+struct Frontmatter {
+    struct Field: Identifiable {
+        let name: String
+        let values: [String]
+        let isList: Bool
+        var id: String { name }
+    }
+
+    var fields: [Field] = []
+    var raw = ""
+
+    var isEmpty: Bool { fields.isEmpty }
+    /// Tag-like lists are shown as pills below the rows, per the design.
+    var rows: [Field] { fields.filter { !$0.isList } }
+    var pills: [Field] { fields.filter(\.isList) }
+}
+
 @MainActor
 final class DocumentModel: ObservableObject {
     static let shared = DocumentModel()
@@ -14,6 +32,8 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var markdown = ""
     @Published private(set) var loadError: String?
     @Published private(set) var recents: [URL] = []
+    /// Parsed by the page and sent back, so there is only one parser.
+    @Published var frontmatter = Frontmatter()
     /// Bumped on every content change so the web view knows to re-render.
     @Published private(set) var revision = 0
 
@@ -40,6 +60,7 @@ final class DocumentModel: ObservableObject {
         let resolved = target.standardizedFileURL
         url = resolved
         canonicalPath = resolved.resolvingSymlinksInPath().path
+        frontmatter = Frontmatter()
         load()
         if remember { self.remember(resolved) }
         // Watch after loading so an editor's atomic save can't slip past us.

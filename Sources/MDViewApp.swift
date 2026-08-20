@@ -128,6 +128,10 @@ struct ViewerCommands: Commands {
 
         CommandGroup(after: .pasteboard) {
             Divider()
+            Button("Front Matter") { send(.mdvToggleFrontmatter) }
+                .keyboardShortcut("i")
+                .disabled(doc.url == nil)
+            Divider()
             Button("Find…") { send(.mdvFind) }
                 .keyboardShortcut("f")
                 .disabled(doc.url == nil)
