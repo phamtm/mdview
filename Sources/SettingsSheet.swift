@@ -162,7 +162,7 @@ struct SettingsSheet: View {
     private var alignmentChoice: some View {
         HStack(spacing: Self.space4) {
             Text("Alignment")
-                .font(Typeface.display(14))
+                .font(Typeface.displayMatching(11.5))
                 .foregroundStyle(palette.text)
             Spacer(minLength: 0)
             segmented(
@@ -181,7 +181,7 @@ struct SettingsSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: Self.space4) {
                 Text("Column width")
-                    .font(Typeface.display(14))
+                    .font(Typeface.displayMatching(11.5))
                     .foregroundStyle(palette.text)
                 Spacer(minLength: 0)
                 Text("\(Int(measure)) pt")
@@ -237,7 +237,7 @@ struct SettingsSheet: View {
     private var typeSize: some View {
         HStack(spacing: Self.space4) {
             Text("Type size")
-                .font(Typeface.display(14))
+                .font(Typeface.displayMatching(11.5))
                 .foregroundStyle(palette.text)
             Spacer(minLength: 0)
             segmented(

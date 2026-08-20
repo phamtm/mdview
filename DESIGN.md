@@ -42,6 +42,19 @@ Three themes resolved from those ramps: **Paper** (near-white), **Vellum** (warm
 accent-tinted), **Colophon** (near-black). Chosen from `View ▸ Theme`; "Follow
 System" picks Paper or Colophon by appearance.
 
+### Sizing display type against body type
+
+The two faces are not the same optical size at the same point size. Measured from
+the files at 12.5pt: **Lora's x-height is 6.25, Cormorant's is 4.83** — 23%
+smaller. The eye reads x-height as size, so mixed-case Cormorant set at the body's
+point size looks a third too small, which is what made folder names in the sidebar
+hard to read next to filenames.
+
+So mixed-case chrome uses `Typeface.displayMatching(bodySize)`, which applies the
+measured 1.295 ratio: folder rows are Cormorant at 16pt beside files in Lora at
+12.5pt, and they read as equals. Labels **in caps** are governed by cap height
+instead and need no correction — those still use `Typeface.display` directly.
+
 ## Layout
 
 | Zone | Value |

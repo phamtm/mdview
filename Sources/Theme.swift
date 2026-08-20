@@ -100,8 +100,20 @@ enum Typeface {
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
     }
 
+    /// Cormorant's x-height is 4.83 where Lora's is 6.25, both at 12.5pt
+    /// (measured from the faces). The eye reads x-height as size, so mixed-case
+    /// display text set at the body's point size looks a third too small.
+    static let opticalRatio: CGFloat = 1.295
+
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .custom(heading, size: size).weight(weight)
+    }
+
+    /// Display type that reads the same size as body type at `bodySize`. Use for
+    /// mixed-case chrome — labels in caps are governed by cap height, not
+    /// x-height, and need no correction.
+    static func displayMatching(_ bodySize: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        display((bodySize * opticalRatio).rounded(), weight: weight)
     }
 
     static func text(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {

@@ -157,8 +157,11 @@ struct SidebarRowView: View {
         HStack(spacing: 7) {
             glyph
             Text(node.name)
-                .font(node.isDirectory ? Typeface.display(12.5) : Typeface.text(12.5))
-                .tracking(node.isDirectory ? 0.75 : 0)
+                .font(
+                    node.isDirectory
+                        ? Typeface.displayMatching(12.5) : Typeface.text(12.5)
+                )
+                .tracking(node.isDirectory ? 0.4 : 0)
                 .foregroundStyle(labelColour)
                 .lineLimit(1)
                 .truncationMode(.middle)

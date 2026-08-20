@@ -236,7 +236,7 @@ struct TitleBar: View {
         let hasDocument = name != nil
         return VStack(spacing: 1) {
             Text(name ?? "No document")
-                .font(Typeface.display(13))
+                .font(Typeface.displayMatching(11.5))
                 .tracking(0.13)
                 .foregroundStyle(palette.text)
                 .lineLimit(1)
