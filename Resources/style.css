@@ -1155,12 +1155,15 @@ body {
   font-family: var(--font-body);
 }
 
-/* The column leaves room for the rail, and shifts right when it is pinned. */
+/* The column leaves room for the rail, and shifts right when it is pinned.
+   The measure grows by exactly the extra padding: box-sizing is border-box, so
+   without that the text would lose 244px of width instead of moving right. */
 .prose {
   padding-left: 68px;
 }
 body.rail-pinned .prose {
   padding-left: 312px;
+  max-width: calc(var(--measure) + 244px);
 }
 
 @media print {

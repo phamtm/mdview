@@ -163,5 +163,9 @@ Two things to know if you touch it:
   animation frames when the window is offscreen, so the rail never initialises in
   the snapshot harness. `getBoundingClientRect` forces layout anyway, so reading
   synchronously is both simpler and testable.
+- **Pinning widens the measure by exactly the extra padding.** `box-sizing` is
+  `border-box`, so `padding-left: 312px` alone takes 244px out of the text column
+  rather than moving it right. In a window too narrow to fit the wider measure the
+  column does still shrink — there is nowhere else for it to go.
 - **The outline is re-read after diagrams draw.** Mermaid changes the height of
   the page, which invalidates every offset below it.

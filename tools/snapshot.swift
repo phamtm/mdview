@@ -26,10 +26,13 @@ final class Runner: NSObject, WKNavigationDelegate {
 
     override init() {
         let config = WKWebViewConfiguration()
+        // MDVIEW_WIDTH widens the page, for layout that depends on the measure
+        // fitting inside the viewport.
+        let pageWidth = Double(ProcessInfo.processInfo.environment["MDVIEW_WIDTH"] ?? "") ?? 900
         webView = WKWebView(
-            frame: NSRect(x: 0, y: 0, width: 900, height: 1200), configuration: config)
+            frame: NSRect(x: 0, y: 0, width: pageWidth, height: 1200), configuration: config)
         window = NSWindow(
-            contentRect: NSRect(x: -20000, y: -20000, width: 900, height: 1200),
+            contentRect: NSRect(x: -20000, y: -20000, width: pageWidth, height: 1200),
             styleMask: [.borderless], backing: .buffered, defer: false)
         markdown = (try? String(contentsOf: mdURL, encoding: .utf8)) ?? ""
         super.init()
@@ -92,6 +95,13 @@ final class Runner: NSObject, WKNavigationDelegate {
               railRows: document.querySelectorAll('.rail-panel .rail-row').length,
               railHidden: !!document.querySelector('.rail-zone').hidden,
               asciiBlocks: document.querySelectorAll('#doc figure.code.ascii').length,
+              railPinned: document.body.classList.contains('rail-pinned'),
+              proseTextWidth: (function () {
+                var doc = document.getElementById('doc');
+                var style = getComputedStyle(doc);
+                return Math.round(
+                  doc.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+              })(),
               asciiLeading: (function () {
                 var pre = document.querySelector('#doc figure.code.ascii pre');
                 if (!pre) return 'none';
@@ -162,6 +172,14 @@ final class Runner: NSObject, WKNavigationDelegate {
               return 'entered';
             })()
             """
+        let clickPin = """
+            (function () {
+              const pin = document.querySelector('.rail-pin');
+              if (!pin) return 'no pin';
+              pin.click();
+              return 'pinned';
+            })()
+            """
         let hoverTick = """
             (function () {
               const ticks = document.querySelectorAll('.rail-ticks .rail-tick');
@@ -173,11 +191,16 @@ final class Runner: NSObject, WKNavigationDelegate {
             """
         webView.evaluateJavaScript(enterZone) { _, _ in
             // The panel opens only after dwelling in the zone.
-            let wait = mode == "expand" ? 3.6 : 0.4
+            let wait = mode == "hover" ? 0.4 : 2.6
             if mode == "hover" {
                 self.webView.evaluateJavaScript(hoverTick) { _, _ in }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { self.diagnose() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+                guard mode == "pin" else { self.diagnose(); return }
+                self.webView.evaluateJavaScript(clickPin) { _, _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.diagnose() }
+                }
+            }
         }
     }
 
@@ -208,7 +231,7 @@ final class Runner: NSObject, WKNavigationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 let config = WKSnapshotConfiguration()
                 config.rect = self.webView.bounds
-                config.snapshotWidth = 900
+                config.snapshotWidth = NSNumber(value: Int(self.webView.bounds.width))
                 self.webView.takeSnapshot(with: config) { image, error in
                     if let error { print("snapshot error \(mode): \(error)") }
                     if let image, let tiff = image.tiffRepresentation,
