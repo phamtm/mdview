@@ -82,6 +82,20 @@ MainActor.assumeIsolated {
     let sawRemoval = waitUntil { docs?.children.contains { $0.name == "brand-new.md" } == false }
     check("expanded folder drops a deleted file", sawRemoval)
 
+    // A symlink beside its target lists twice; both rows must survive, which
+    // means identity cannot be the resolved path.
+    let link = root.appendingPathComponent("AGENTS.md")
+    try? FileManager.default.createSymbolicLink(
+        at: link, withDestinationURL: root.appendingPathComponent("README.md"))
+    workspace.refresh()  // re-reads the folder; toggling expansion alone does not
+    workspace.flattenRows()
+    let listed = workspace.rows.map { $0.node.name }
+    check(
+        "a symlink is listed alongside its target: \(listed)",
+        listed.contains("AGENTS.md") && listed.contains("README.md"))
+    let linkIds = workspace.rows.map(\.id)
+    check("symlink and target have distinct row ids", Set(linkIds).count == linkIds.count)
+
     // The rendered rows are what SwiftUI iterates; ids must be unique even when
     // one added folder contains another, which puts the same file on screen twice.
     workspace.add(root.appendingPathComponent("docs"))

@@ -104,10 +104,13 @@ final class FileNode: ObservableObject, Identifiable {
 struct SidebarRow: Identifiable {
     let node: FileNode
     let depth: Int
-    /// Includes the depth: adding two folders where one contains the other puts
-    /// the same file on screen twice, and duplicate ForEach ids drop rows and
-    /// misroute taps.
-    var id: String { "\(depth)/\(node.canonicalPath)" }
+    /// Identity is where the row *appears*, not what it points at.
+    ///
+    /// Depth is included because adding two folders where one contains the other
+    /// puts the same file on screen twice. The listed path is used rather than the
+    /// symlink-resolved one because a symlink beside its target — `AGENTS.md ->
+    /// CLAUDE.md` — otherwise gives both rows the same id, and SwiftUI drops one.
+    var id: String { "\(depth)/\(node.url.path)" }
 }
 
 /// The folders the user has added to the sidebar.

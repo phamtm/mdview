@@ -56,12 +56,26 @@ struct SidebarView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(workspace.rows) { row in
-                    SidebarRowView(row: row, palette: palette, workspace: workspace, doc: doc)
+                    SidebarRowView(
+                        row: row, selectedID: selectedRowID, palette: palette,
+                        workspace: workspace, doc: doc)
                 }
             }
             .padding(.horizontal, 9.2)
             .padding(.bottom, Self.pad)
         }
+    }
+
+    /// Exactly one row is marked, chosen here rather than per row: a symlink and
+    /// its target resolve to the same file, so matching on the resolved path alone
+    /// would highlight both. The row actually opened wins.
+    private var selectedRowID: String? {
+        guard let listed = doc.url?.path else { return nil }
+        if let exact = workspace.rows.first(where: { $0.node.url.path == listed }) {
+            return exact.id
+        }
+        guard let canonical = doc.canonicalPath else { return nil }
+        return workspace.rows.first { $0.node.canonicalPath == canonical }?.id
     }
 
     private var footer: some View {
@@ -130,13 +144,14 @@ struct SearchField: NSViewRepresentable {
 
 struct SidebarRowView: View {
     let row: SidebarRow
+    let selectedID: String?
     let palette: Palette
     @ObservedObject var workspace: WorkspaceModel
     @ObservedObject var doc: DocumentModel
     @State private var hovering = false
 
     private var node: FileNode { row.node }
-    private var isCurrent: Bool { doc.canonicalPath == node.canonicalPath }
+    private var isCurrent: Bool { row.id == selectedID }
 
     var body: some View {
         HStack(spacing: 7) {

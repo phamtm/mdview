@@ -89,6 +89,10 @@ MainActor.assumeIsolated {
             to: reference.appendingPathComponent(name),
             atomically: true, encoding: .utf8)
     }
+    // MDVIEW_ROOT points the sidebar at a real folder, for reproducing a listing.
+    if let real = ProcessInfo.processInfo.environment["MDVIEW_ROOT"] {
+        workspace.add(URL(fileURLWithPath: real))
+    }
     workspace.add(notes)
     workspace.add(reference)
     DocumentModel.shared.open(readme)

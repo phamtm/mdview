@@ -124,6 +124,18 @@ Three implementation notes that are easy to trip over:
 - **No Parsed/Raw toggle.** The design offers a raw view of the block; the parsed
   rows are what the panel is for, and the file itself is a keystroke away.
 
+## Sidebar identity
+
+A row's identity is **where it appears**, not what it points at: `depth` plus the
+path as listed. A symlink beside its target — `AGENTS.md -> CLAUDE.md` — resolves
+to the same file, so using the resolved path gave both rows the same `ForEach` id
+and SwiftUI dropped one, leaving a gap in the list.
+
+The resolved path is still used for two things: matching the open document to its
+row (so a file reached through a symlinked folder still highlights), and `reveal`.
+Because both twins resolve alike, the selected row is chosen once for the whole
+list — the row actually opened wins — rather than each row deciding for itself.
+
 ## Where things live
 
 | Concern | File |
