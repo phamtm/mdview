@@ -42,6 +42,12 @@ final class FileNode: ObservableObject, Identifiable {
         isExpanded.toggle()
     }
 
+    /// Reads children without expanding, so search can look inside closed folders.
+    func loadForSearch() {
+        guard isDirectory, !loaded else { return }
+        load()
+    }
+
     func reloadIfLoaded() {
         guard loaded else { return }
         load()
@@ -112,6 +118,10 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var roots: [FileNode] = []
     /// The tree flattened to what's actually on screen, rebuilt on every change.
     @Published private(set) var rows: [SidebarRow] = []
+    /// The sidebar's search box. While it holds text, folders expand to show
+    /// their matches and folders with none drop out of the list.
+    @Published var query = "" { didSet { flattenRows() } }
+
     @Published var showAllFiles: Bool {
         didSet {
             UserDefaults.standard.set(showAllFiles, forKey: showAllKey)
@@ -150,14 +160,39 @@ final class WorkspaceModel: ObservableObject {
 
     /// Immediate rebuild, for actions whose result is read straight away.
     func flattenRows() {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
         var flattened: [SidebarRow] = []
+
+        /// While searching, a folder earns its row only if something under it
+        /// matches — and it is shown open, so the matches are visible.
+        func matches(_ node: FileNode) -> Bool {
+            if needle.isEmpty { return true }
+            if node.name.lowercased().contains(needle) { return true }
+            guard node.isDirectory else { return false }
+            if !node.isExpanded { node.loadForSearch() }
+            return node.children.contains(where: matches)
+        }
+
         func walk(_ node: FileNode, depth: Int) {
             flattened.append(SidebarRow(node: node, depth: depth))
-            guard node.isDirectory, node.isExpanded else { return }
-            for child in node.children { walk(child, depth: depth + 1) }
+            guard node.isDirectory, node.isExpanded || !needle.isEmpty else { return }
+            for child in node.children where matches(child) { walk(child, depth: depth + 1) }
         }
-        roots.forEach { walk($0, depth: 0) }
+
+        for root in roots where matches(root) { walk(root, depth: 0) }
         rows = flattened
+    }
+
+    /// "3 folders · 7 files", as the design's footer shows.
+    var libraryMeta: String {
+        var folders = 0
+        var files = 0
+        for row in rows {
+            if row.node.isDirectory { folders += 1 } else { files += 1 }
+        }
+        let f = "\(folders) folder" + (folders == 1 ? "" : "s")
+        let d = "\(files) file" + (files == 1 ? "" : "s")
+        return "\(f) · \(d)"
     }
 
     func addFolderPanel() {

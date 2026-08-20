@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         UserDefaults.standard.register(defaults: ["showFrontmatter": true])
+        // Cormorant Garamond and Lora, so the chrome sets in the same faces as
+        // the document. Must happen before any view is built.
+        Typeface.register()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

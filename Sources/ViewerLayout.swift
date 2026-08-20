@@ -10,38 +10,45 @@ struct ViewerView: View {
     @AppStorage("sidebarVisible") private var sidebarVisible = true
     @AppStorage("sidebarWidth") private var storedWidth = ViewerView.sidebarDefaultWidth
     @State private var widthAtDragStart: CGFloat?
+    @AppStorage("theme") private var themeName = AppTheme.system.rawValue
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
-    // Layout zones — see DESIGN.md. Measured on macOS 26: the traffic lights are
-    // 14pt, span x=9…69, bottom edge at 23pt. They get a band of their own;
-    // chrome content clears it rather than aligning into it.
+    // Layout zones, from the design: a 48pt titlebar band across the top, split
+    // by a hairline at the sidebar's edge. The traffic lights (14pt, x=9…69 on
+    // macOS 26) sit in the left half of that band.
     static let trafficLightSpan: CGFloat = 69
-    static let reservedTopBand: CGFloat = 44
-    static let headerHeight: CGFloat = 56
-    static let sidebarTopInset: CGFloat = 60
-    static let sidebarDefaultWidth = 264.0
+    static let titlebarHeight: CGFloat = 48
+    static let sidebarDefaultWidth = Double(SidebarView.width)
 
     var body: some View {
-        HStack(spacing: 0) {
-            if sidebarVisible {
-                SidebarView(workspace: workspace, doc: doc, topInset: ViewerView.sidebarTopInset)
-                    .frame(width: storedWidth)
-                    .overlay(alignment: .trailing) { resizeHandle }
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                    .zIndex(1)
-            }
+        VStack(spacing: 0) {
+            TitleBar(
+                name: doc.url?.lastPathComponent,
+                meta: documentMeta,
+                sidebarWidth: sidebarVisible ? storedWidth : 120,
+                sidebarVisible: sidebarVisible,
+                palette: palette,
+                toggleSidebar: toggleSidebar
+            )
 
-            VStack(spacing: 0) {
-                DocumentHeader(
-                    name: doc.url?.lastPathComponent,
-                    folder: folder,
-                    leadingInset: sidebarVisible ? 16 : ViewerView.trafficLightSpan + 16,
-                    toggleSidebar: toggleSidebar
-                )
+            HStack(spacing: 0) {
+                if sidebarVisible {
+                    SidebarView(workspace: workspace, doc: doc, palette: palette)
+                        .frame(width: storedWidth)
+                        .overlay(alignment: .trailing) { resizeHandle }
+                        .overlay(alignment: .trailing) {
+                            Rectangle().fill(palette.divider).frame(width: 1)
+                        }
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .zIndex(1)
+                }
+
                 ViewerWebView(doc: doc)
+                    .frame(minWidth: 420, minHeight: 320)
             }
-            .frame(minWidth: 420, minHeight: 320)
         }
+        .background(palette.bg)
         // The titlebar is transparent, so content owns the whole window frame.
         .ignoresSafeArea()
         // No focus rings on any control: this is a reading window, and SwiftUI
@@ -69,6 +76,18 @@ struct ViewerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleSidebar)) { _ in
             toggleSidebar()
         }
+    }
+
+    private var palette: Palette {
+        (AppTheme(rawValue: themeName) ?? .system).palette(dark: colorScheme == .dark)
+    }
+
+    /// The design shows a word count under the filename.
+    private var documentMeta: String {
+        guard doc.url != nil else { return "" }
+        if let error = doc.loadError { return error }
+        let words = doc.markdown.split(whereSeparator: { $0 == " " || $0.isNewline }).count
+        return words == 1 ? "1 word" : "\(words.formatted()) words"
     }
 
     private func toggleSidebar() {
@@ -104,44 +123,89 @@ struct ViewerView: View {
     }
 }
 
-/// The filename, now that the titlebar no longer shows it. No bottom border —
-/// it shares the document's background and reads as part of the page.
-struct DocumentHeader: View {
+/// The 48pt band across the top of the window.
+///
+/// Split by a hairline at the sidebar's edge: the traffic lights and the sidebar
+/// toggle sit left of it, the document's name and word count centred right of
+/// it. No filename in the real titlebar — that is hidden, so this is it.
+struct TitleBar: View {
     let name: String?
-    let folder: String
-    let leadingInset: CGFloat
+    let meta: String
+    let sidebarWidth: CGFloat
+    let sidebarVisible: Bool
+    let palette: Palette
     let toggleSidebar: () -> Void
 
     var body: some View {
-        HStack(spacing: 9) {
-            Button(action: toggleSidebar) {
-                Image(systemName: "sidebar.leading")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 20)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Toggle sidebar (⌘B)")
-
-            if let name {
-                Text(name)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                Text(folder)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-            }
-            Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            leftZone
+            documentLabel
         }
-        .padding(.leading, leadingInset)
-        .padding(.trailing, 16)
-        // Tall enough that the row's content sits below the traffic lights rather
-        // than between them — see DESIGN.md, "The traffic-light band".
-        .frame(height: ViewerView.headerHeight)
-        .background(Color(nsColor: .textBackgroundColor))
+        .frame(height: ViewerView.titlebarHeight)
+        .background(palette.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(palette.divider).frame(height: 1)
+        }
+    }
+
+    /// Holds the traffic lights, with the toggle at its inner edge.
+    private var leftZone: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: ViewerView.trafficLightSpan)
+            IconButton(symbol: "sidebar.leading", palette: palette, action: toggleSidebar)
+                .help("Toggle sidebar (⌘B)")
+        }
+        .frame(width: max(sidebarWidth, 120))
+        .padding(.trailing, 13.8)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(palette.divider).frame(width: 1)
+        }
+    }
+
+    private var documentLabel: some View {
+        VStack(spacing: 1) {
+            Text(name ?? "No document")
+                .font(Typeface.display(13))
+                .tracking(0.13)
+                .foregroundStyle(palette.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if !meta.isEmpty {
+                Text(meta)
+                    .font(Typeface.text(10))
+                    .tracking(0.9)
+                    .textCase(.uppercase)
+                    .foregroundStyle(palette.muted)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 13.8)
+    }
+}
+
+/// A 26pt square, transparent until hovered, then a gold wash — the design's
+/// only interactive chrome treatment.
+struct IconButton: View {
+    let symbol: String
+    let palette: Palette
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(hovering ? palette.accentText : palette.muted)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(palette.accent.opacity(hovering ? 0.14 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

@@ -33,6 +33,7 @@ struct TrafficLights: View {
 }
 
 MainActor.assumeIsolated {
+    Typeface.register()
     let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(
         "mdview-window-demo")
     try? FileManager.default.removeItem(at: base)

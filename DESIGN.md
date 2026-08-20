@@ -1,171 +1,107 @@
-# MDView design language
+# MDView design
 
-## Why this exists
+## The spec lives in Claude Design
 
-Every spacing and colour value in this app used to be decided locally — some in
-Swift constants, some in CSS, none of them related to each other. That is how the
-chrome drifted into feeling cramped while the document itself felt fine: there was
-no shared idea of how much room anything deserves.
+This app's look is specified by a Claude Design project, not by this file:
 
-This document is the source of truth. The numbers in `Sources/*.swift` and
-`Resources/style.css` are meant to *implement* it, not compete with it. When
-something looks wrong, change it here first and then follow it into the code.
+- **`Markdown Viewer.dc.html`** — project `bf2995a1-bb2b-4e8c-b27e-e70f3be0b0a0`.
+  The app itself: the titlebar band, the library sidebar, the contents rail, the
+  settings sheet, the three themes.
+- **Classical** — project `713d313f-b0ac-4c37-8302-2d699caba821`, the design
+  system it builds on. Its `styles.css` is the token source: the ramps, the
+  spacing scale, the type pairing.
 
-## The one rule
+Read those before changing anything visual, and take real values from them rather
+than inventing spacing or colour. This file records only **how** the spec is
+implemented here, and where the two necessarily differ.
 
-**The document is the only thing in the window allowed to attract the eye.**
+An earlier version of this document described a different direction — system
+sans, monochrome chrome, no lines anywhere. It has been replaced wholesale. Where
+traces of it survive in old commits, the design project wins.
 
-Everything else — sidebar, header, buttons — is navigation furniture. Furniture
-earns its keep by being findable when you look for it and invisible when you
-don't. Concretely, that means:
+## The idea
 
-- Chrome is greyscale. Colour is reserved for content.
-- Nothing in the chrome is separated by a line. Grouping is done with space, and
-  with a single small step in surface tint.
-- Chrome text sits at secondary or tertiary weight. Only the document uses full
-  contrast for body text.
-- The eye should land on the document title first, every time.
+Editorial. Serif type on a soft ground, justified columns, hairlines carrying the
+structure of the page, and a single gold accent applied as **stroke and rule,
+never fill**. Cards are bordered, buttons are outlined, photographs sit matted
+like tipped-in plates. Nothing is bolder than semibold, and the bigger the type
+the lighter it sets.
 
-## Principles
+## Tokens
 
-1. **Space is the primary tool.** Before adding a border, a background, or a
-   colour to separate two things, add space. Only if space fails do you reach for
-   tint. Lines are the last resort and are currently used nowhere in the chrome.
-2. **Air around the window controls.** The traffic lights are the first thing you
-   see; crowding them makes the whole window feel tight. They get their own band
-   that nothing else occupies.
-3. **One accent, used rarely.** A second accent colour would force the eye to
-   choose. Links, alert rules and in-content selection use the accent; chrome
-   never does.
-4. **Density is set once, per surface.** The sidebar has one row height, one
-   indent step, one horizontal inset. Rows do not get bespoke padding.
-5. **Every value comes from the scale.** If a number isn't on the spacing scale,
-   it is either a measured platform constraint (documented as such) or a mistake.
+| | |
+| --- | --- |
+| Heading face | Cormorant Garamond (400 display, 600 interface) |
+| Body face | Lora (400, 600, italic) |
+| Neutral ramp | `#f8f4f4` `#eae7e7` `#d7d3d3` `#bab6b6` `#7d7979` `#444141` `#2d2b2b` |
+| Accent ramp | `#fff3e4` `#ffe3bf` `#facb8d` `#e1ad66` `#c28d41` `#a06f24` `#5a3b0a` `#3a270d` |
+| Spacing | 4.6 · 9.2 · 13.8 · 18.4 · 27.6 · 36.8 |
+| Radius | 2 · 4 · 7 |
 
-## Spacing scale
-
-Base unit 4pt. Use these and nothing between them.
-
-| Token | Value | Used for |
-| --- | --: | --- |
-| `xs` | 4 | Icon-to-label gaps, inside a control |
-| `s` | 8 | Tight grouping, chevron-to-label |
-| `m` | 12 | Standard padding inside chrome surfaces |
-| `l` | 16 | Between groups of rows; above a section label |
-| `xl` | 24 | Between unrelated blocks |
-| `xxl` | 32 | Reserved band heights, large separations |
+Three themes resolved from those ramps: **Paper** (near-white), **Vellum** (warm,
+accent-tinted), **Colophon** (near-black). Chosen from `View ▸ Theme`; "Follow
+System" picks Paper or Colophon by appearance.
 
 ## Layout
 
-### The traffic-light band
+| Zone | Value |
+| --- | --- |
+| Titlebar band | 48pt, surface-coloured, hairline beneath |
+| Band split | hairline at the sidebar's edge; traffic lights and the sidebar toggle sit left of it |
+| Sidebar | 258pt default (drag 170–460), surface 62% over bg, hairline right edge |
+| Sidebar row | 27pt, 16pt indent per level, 4pt radius |
+| Document column | 700pt measure at 17px (640/15 small, 760/19 large) |
+| Column padding | 72pt top, 36.8pt sides, 120pt bottom |
 
-Measured on macOS 26, not guessed: the buttons are 14pt, span **x = 9…69**, and
-their centre line is **16pt** from the top of the window. Their bottom edge is at
-23pt.
+Traffic lights measured on macOS 26: 14pt, spanning x=9…69, centre 16pt from the
+top of the window. The band is tall enough to hold them with room around, rather
+than crowding them with adjacent chrome.
 
-**Reserve the top 44pt of the window.** No chrome content sits above that line —
-not sidebar rows, not header text. This is the single biggest contributor to
-whether the window feels calm or cramped.
+## How the two halves stay in step
 
-An earlier version centred the document header on the buttons' 16pt centre line.
-That was the wrong target: it is *technically* aligned and *visually* crowded,
-because the header text then sits between the buttons rather than below them. The
-reference apps we like all give the buttons their own empty band.
+The palette exists **twice**: `Resources/style.css` for the document, and
+`Sources/Theme.swift` for the chrome AppKit draws. The duplication is deliberate —
+two short readable tables beat a build step that syncs them, for an app this size —
+but it means **a colour changed in one must be changed in the other.**
 
-### Zones
+Three implementation notes that are easy to trip over:
 
-| Zone | Value | Notes |
-| --- | --: | --- |
-| Window top reserved | 44 | Traffic lights only |
-| Document header height | 56 | Content centred at 28pt — clear of the buttons |
-| Header leading inset, sidebar open | 16 | |
-| Header leading inset, sidebar hidden | 84 | Clears x=69 plus `l` |
-| Sidebar content top inset | 60 | First row starts below the reserved band |
-| Sidebar default width | 264 | Range 200…460 |
-| Sidebar horizontal padding | 12 | `m` |
-| Document measure | 43rem | ~72 characters |
-| Document gutter | 3.25rem | |
+- **Fonts ship twice too.** The page loads woff2 (small, and all WebKit needs);
+  the chrome needs real TTFs, because CoreText cannot register woff2. Both sit in
+  `Resources/fonts/`, and neither can come from Google's CDN — the page's CSP
+  blocks remote origins.
+- **Mermaid cannot read the theme tokens directly.** Vellum and Colophon are built
+  from `color-mix()`, which WebKit resolves to `color(srgb …)` — a syntax mermaid's
+  colour parser rejects, and which silently killed every diagram in those two
+  themes. Tokens are flattened to plain `rgb()` through a 1×1 canvas first, then
+  the diagram is repainted as stroke-on-nothing.
+- **Test every theme.** The bug above passed a suite that only rendered the
+  default one. `tools/run-tests.sh` now renders all three.
 
-## Type
-
-Two ramps, deliberately separate: chrome is quiet and small, content is
-comfortable and full-contrast. Chrome uses the system UI font; content has its own
-ramp in `style.css`.
-
-| Role | Size | Weight | Colour | Notes |
-| --- | --: | --- | --- | --- |
-| Section label (root folder) | 10.5 | semibold | tertiary | Uppercase, +0.5 tracking |
-| Sidebar row | 13 | regular | primary | |
-| Header filename | 13 | medium | primary | |
-| Header path | 11 | regular | tertiary | Truncates from the head |
-| Quiet action ("Add Folder") | 13 | regular | tertiary | |
-
-Content ramp lives in `Resources/style.css`: 16.5px body at 1.72 line height, and
-a display face for headings. Don't reconcile the two — they are different
-registers on purpose.
-
-## Colour
-
-Semantic roles only. No component names a raw colour.
-
-| Role | Light | Dark | Where |
-| --- | --- | --- | --- |
-| `surface-document` | system `textBackgroundColor` | same | Document pane, header |
-| `surface-chrome` | document + 3.5% primary | same | Sidebar |
-| `text-primary` | system primary | same | Row labels, filename |
-| `text-secondary` | system secondary | same | Icons |
-| `text-tertiary` | system tertiary | same | Section labels, paths |
-| `fill-selected` | 8.5% primary | same | Current file row |
-| `fill-hover` | 4.5% primary | same | Row under the pointer |
-| `accent` | `#3059c9` | `#86a8ff` | **Content only** |
-
-Two things to note:
-
-- The sidebar is separated from the document by **3.5% tint and nothing else**. No
-  border, no shadow, no divider. If the two surfaces ever need more separation than
-  that, the fix is more space, not a line.
-- Selection in the sidebar is a **neutral** fill, not an accent tint. The current
-  file is worth marking, not worth shouting about; an accent-filled row competes
-  with the document for attention.
-
-## Components
-
-**Sidebar row.** 32pt tall, 18pt indent per level, 12pt horizontal padding,
-8pt-radius fill for hover and selection. Chevron for folders, 13pt wide slot kept
-for files so names align. No icons — the chevron carries the structure, and icons
-at this density read as clutter.
-
-**Section label (root folder).** Uppercase, tertiary, 10.5pt. `l` (16) of space
-above it, except the first one. This space is what makes multiple folders read as
-separate groups without a divider.
-
-**Document header.** Filename plus dimmed path, and the sidebar toggle. Shares the
-document's background, no bottom border. It is a label, not a toolbar.
-
-**Focus.** No focus rings anywhere: `.focusEffectDisabled()` at the layout root,
-and the web view takes first responder at launch. This is a reading window.
-
-**Motion.** Only the sidebar's show/hide is animated (0.2s ease-out). Rows do not
-animate on hover; the fill appears immediately.
-
-## Anti-patterns
-
-- A divider anywhere in the chrome.
-- An accent-coloured sidebar row, badge, or count.
-- A second accent colour.
-- Per-component padding that isn't on the scale.
-- Aligning chrome text with the traffic lights instead of clearing them.
-- Icons added "for scanability" in a list where names already scan.
-
-## Where the tokens live
+## Where things live
 
 | Concern | File |
 | --- | --- |
-| Zone heights, insets, traffic-light constants | `Sources/ViewerLayout.swift` |
-| Sidebar density, row and label specs | `Sources/SidebarView.swift` |
-| Content type ramp, content colour, callouts, code | `Resources/style.css` |
+| Chrome palette, theme resolution, typeface registration | `Sources/Theme.swift` |
+| Titlebar band, zones, the divider-less split | `Sources/ViewerLayout.swift` |
+| Sidebar density, rows, search, badges, footer | `Sources/SidebarView.swift` |
+| Document type, colour, code, diagrams, callouts | `Resources/style.css` |
+| Document post-processing and diagram tinting | `web/src/viewer.js` |
 
-There is deliberately no shared token file across the Swift/CSS boundary — two
-small tables that are read by humans beat a build step that syncs them. The cost
-is that this document is the only thing keeping them coherent, which is why
-changes start here.
+## Implemented
+
+Document surface in all three themes, text sizes, the editorial column, code
+figures with caption bars, syntax colours, diagram treatment, frontmatter block,
+alerts, footnotes, find bar. Chrome: the titlebar band with document name and word
+count, the library sidebar with search, file badges, gold selection and a counted
+footer.
+
+## Not yet built
+
+- **The contents rail** — tick marks down the left of the document that swell on
+  hover, a preview card, expansion after a dwell, a pin. Belongs in the page: it
+  needs heading positions.
+- **The settings sheet** — theme swatches and a size segmented control. These are
+  menu items for now.
+- **Frontmatter as a titlebar disclosure** (`⌘I`) — rendered in the document
+  instead. Needs the parsed fields passed from the page back to Swift.

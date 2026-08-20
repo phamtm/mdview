@@ -26,13 +26,6 @@ cp tools/test-workspace.swift build/workspace-tool/main.swift
 swiftc -O -o build/test-workspace $SRC build/workspace-tool/main.swift
 ./build/test-workspace
 
-echo "==> sidebar appearance"
-mkdir -p build/sidebar-tool
-cp tools/snapshot-sidebar.swift build/sidebar-tool/main.swift
-swiftc -O -o build/snapshot-sidebar $SRC build/sidebar-tool/main.swift
-./build/snapshot-sidebar build/sidebar-light.png light
-./build/snapshot-sidebar build/sidebar-dark.png dark
-
 echo "==> window chrome (real app)"
 ./build.sh >/dev/null
 ./tools/check-window-chrome.sh
@@ -75,7 +68,7 @@ CHECK
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist
 # named after each executable. cfprefsd owns those files and rewrites them after a
 # process exits, so ask the daemon to drop the domains rather than deleting files.
-for domain in test-workspace snapshot-sidebar snapshot-window; do
+for domain in test-workspace snapshot-window; do
   defaults delete "$domain" >/dev/null 2>&1 || true
   rm -f "$HOME/Library/Preferences/$domain.plist"
 done

@@ -360,12 +360,12 @@ import DOMPurify from "dompurify";
     const { accent, text, surface, divider } = palette;
     try {
       window.mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "base",
-      fontFamily: css.fontFamily,
-      flowchart: { curve: "basis", padding: 10, nodeSpacing: 34, rankSpacing: 46 },
-      themeVariables: {
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: "base",
+        fontFamily: css.fontFamily,
+        flowchart: { curve: "basis", padding: 10, nodeSpacing: 34, rankSpacing: 46 },
+        themeVariables: {
           darkMode: isDark(),
           background: "transparent",
           primaryColor: surface,
@@ -378,14 +378,16 @@ import DOMPurify from "dompurify";
           nodeBorder: accent,
           clusterBorder: divider,
           edgeLabelBackground: "transparent",
-            fontSize: "13px",
-          },
+          fontSize: "13px",
+        },
       });
     } catch (error) {
       // Never fail silently: a bad token used to kill every diagram at once.
       diagrams.forEach((d) => {
-        d.el.innerHTML = '<div class="error">Mermaid setup: ' +
-          escapeHtml(String((error && error.message) || error)) + "</div>";
+        d.el.innerHTML =
+          '<div class="error">Mermaid setup: ' +
+          escapeHtml(String((error && error.message) || error)) +
+          "</div>";
       });
       return;
     }
@@ -477,7 +479,9 @@ import DOMPurify from "dompurify";
       el.style.strokeWidth = "1px";
     });
     host
-      .querySelectorAll(".nodeLabel, .nodeLabel *, .node foreignObject div, .node text, .node tspan")
+      .querySelectorAll(
+        ".nodeLabel, .nodeLabel *, .node foreignObject div, .node text, .node tspan"
+      )
       .forEach((el) => {
         el.style.color = text;
         el.style.fill = text;
@@ -634,6 +638,5 @@ import DOMPurify from "dompurify";
     refreshDiagrams() {
       if (diagrams.length) drawDiagrams(renderToken);
     },
-
   };
 })();
