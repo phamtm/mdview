@@ -21,7 +21,7 @@ mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
 # without node — it only rebuilds when the sources are newer.
 if command -v node >/dev/null 2>&1 && [ -d web/node_modules ]; then
   needs_build=""
-  for source in web/src/viewer.js web/src/mermaid.js web/build.mjs web/package.json; do
+  for source in web/src/*.js web/build.mjs web/package.json; do
     [ "$source" -nt Resources/bundle.js ] && needs_build="yes"
   done
   if [ -n "$needs_build" ]; then

@@ -37,6 +37,20 @@ for theme in paper vellum night; do
     *) echo "  FAIL asked for $theme, page reported: ${out:-no report}"; fail=1 ;;
   esac
 
+  # Native scrollers follow the window's appearance, so it has to match the chosen
+  # theme rather than the OS: a light theme under a dark macOS drew a white knob.
+  case "$theme" in
+    night) want="NSAppearanceNameDarkAqua" ;;
+    *)     want="NSAppearanceNameAqua" ;;
+  esac
+  appearance="$(echo "$dump" | sed -n 's/.*appearance=\([^ ]*\).*/\1/p')"
+  if [ "$appearance" = "$want" ]; then
+    echo "  ok   $theme window appearance $appearance"
+  else
+    echo "  FAIL $theme wants window appearance $want, got ${appearance:-none}"
+    fail=1
+  fi
+
   # The window frame and the overscroll area are painted by AppKit and WebKit, not
   # by the stylesheet. A system colour there shows as a black edge and a black
   # rubber-band in the dark theme.

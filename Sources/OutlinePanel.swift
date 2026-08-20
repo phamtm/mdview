@@ -12,8 +12,6 @@ struct Outline {
     var headings: [Heading] = []
     /// Which heading the reader is currently under.
     var current = -1
-
-    var isEmpty: Bool { headings.count < 2 }
 }
 
 /// The contents panel: a column on the right of the document, mirroring the

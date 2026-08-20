@@ -33,6 +33,12 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var recents: [URL] = []
     /// Parsed by the page and sent back, so there is only one parser.
     @Published var frontmatter = Frontmatter()
+    /// Words in the body, counted by the page and sent back on the same message.
+    /// Counting here would mean stripping frontmatter here, and a second
+    /// frontmatter parser is a second thing to keep in step. nil only until the
+    /// page's first report; `open()` leaves it alone deliberately — see there.
+    /// A load error hides it either way: the titlebar shows the error instead.
+    @Published var wordCount: Int?
     /// Read from the rendered document by the page; the contents panel shows it.
     @Published var outline = Outline()
     /// Bumped on every content change so the web view knows to re-render.
@@ -62,6 +68,11 @@ final class DocumentModel: ObservableObject {
         url = resolved
         canonicalPath = resolved.resolvingSymlinksInPath().path
         frontmatter = Frontmatter()
+        // wordCount is deliberately *not* cleared: the page reports the new one
+        // within a frame (it posts before it renders), so clearing here would
+        // empty the titlebar's second row and back again on every open, every
+        // ⌘R and every save the watcher picks up. Switching documents replaces
+        // one count with another instead.
         outline = Outline()
         load()
         if remember { self.remember(resolved) }

@@ -103,7 +103,6 @@
   --strong: var(--neutral-900);
   --accent: var(--accent-500);
   --accent-text: var(--accent-600);
-  --code-bg: var(--surface);
   color-scheme: light;
 }
 
@@ -116,7 +115,6 @@
   --strong: var(--accent-900);
   --accent: var(--accent-600);
   --accent-text: var(--accent-800);
-  --code-bg: var(--surface);
   color-scheme: light;
 }
 
@@ -129,7 +127,6 @@
   --strong: var(--neutral-200);
   --accent: var(--accent-400);
   --accent-text: var(--accent-300);
-  --code-bg: var(--surface);
   color-scheme: dark;
 }
 
@@ -143,7 +140,6 @@
     --strong: var(--neutral-200);
     --accent: var(--accent-400);
     --accent-text: var(--accent-300);
-    --code-bg: var(--surface);
     color-scheme: dark;
   }
 }
@@ -192,7 +188,7 @@ body {
 .prose {
   max-width: var(--measure);
   margin: 0 auto;
-  padding: 72px var(--space-8) 120px;
+  padding: 72px var(--space-8) 120px 68px;
   text-align: justify;
   hyphens: auto;
   text-wrap: pretty;
@@ -682,58 +678,6 @@ body {
   text-align: left;
 }
 
-.prose .fm-fields {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0 var(--space-4);
-  margin: 0;
-  font-size: 12.5px;
-}
-
-.prose .fm-fields dt {
-  font-family: var(--font-heading);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 7px 0 5px;
-  border-bottom: 1px solid var(--divider);
-  white-space: nowrap;
-}
-.prose .fm-fields dt:last-of-type,
-.prose .fm-fields dd:last-of-type {
-  border-bottom: 0;
-}
-
-.prose .fm-fields dd {
-  margin: 0 0 0 0;
-  padding: 5px 0;
-  font-variant-numeric: tabular-nums;
-  border-bottom: 1px solid var(--divider);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-  color: var(--strong);
-}
-.prose .fm-fields dd:last-child {
-  border-bottom: 0;
-}
-
-/* Tags are outlined, never filled. */
-.prose .fm-pill {
-  font-family: var(--font-heading);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border: 1px solid var(--accent);
-  border-radius: calc(var(--radius-md) * 0.75);
-  color: var(--accent-text);
-}
-
 /* --- alerts -------------------------------------------------------------- */
 
 .prose blockquote.alert {
@@ -782,6 +726,25 @@ body {
 }
 :root[data-theme="night"] .prose .alert-caution {
   --alert: #d9847a;
+}
+/* Same four again for the System theme on a dark Mac — without this the page
+   keeps the light accents on a near-black ground, and `.alert-label` is 10px
+   text in that colour. The `:not([data-theme])` guard is what keeps it out of
+   Paper and Vellum. `.alert-note` needs no twin: it is pinned to --accent-600
+   in every theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .prose .alert-tip {
+    --alert: #8fae84;
+  }
+  :root:not([data-theme]) .prose .alert-important {
+    --alert: #b795c4;
+  }
+  :root:not([data-theme]) .prose .alert-warning {
+    --alert: var(--accent-300);
+  }
+  :root:not([data-theme]) .prose .alert-caution {
+    --alert: #d9847a;
+  }
 }
 
 /* --- footnotes ----------------------------------------------------------- */
@@ -929,7 +892,8 @@ body {
   }
   .findbar,
   .empty,
-  .copy {
+  .copy,
+  .rail-zone {
     display: none !important;
   }
   .prose {
@@ -950,7 +914,9 @@ body {
 }
 
 /* --- contents rail --------------------------------------------------------
-   Ticks down the left of the column; dwelling in the zone opens the panel.
+   Ticks down the left of the column, one per heading: they show where you are,
+   hovering one names its section in a card beside it, and clicking jumps there.
+   Nothing expands — the outline is a panel in the chrome.
    ------------------------------------------------------------------------- */
 
 .rail-zone {
@@ -964,10 +930,6 @@ body {
 .rail-zone[hidden] {
   display: none;
 }
-.rail-zone.expanded {
-  width: 300px;
-}
-
 .rail-ticks {
   position: absolute;
   left: 20px;
@@ -1027,18 +989,4 @@ body {
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
-}
-
-/* The column leaves room for the tick rail. */
-.prose {
-  padding-left: 68px;
-}
-
-@media print {
-  .rail-zone {
-    display: none !important;
-  }
-  .prose {
-    padding-left: 0;
-  }
 }

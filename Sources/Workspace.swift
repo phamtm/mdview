@@ -32,11 +32,6 @@ final class FileNode: ObservableObject, Identifiable {
         self.workspace = workspace
     }
 
-    /// Folders always get a disclosure triangle; we only know whether one is
-    /// really empty after reading it, and probing every folder up front would
-    /// mean walking the whole tree.
-    var isExpandable: Bool { isDirectory }
-
     func toggle() {
         guard isDirectory else { return }
         isExpanded.toggle()

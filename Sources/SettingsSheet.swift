@@ -257,7 +257,10 @@ struct SettingsSheet: View {
     private var footer: some View {
         HStack {
             Button("Restore defaults") {
-                theme = AppTheme.paper.rawValue
+                // The same theme a first launch gets, which is System — not
+                // Paper. On a dark Mac that means Restore defaults now lands on
+                // Colophon rather than a light document.
+                theme = AppTheme.system.rawValue
                 size = "regular"
                 alignment = "justify"
                 measure = RenderPayload.defaultMeasure
@@ -302,21 +305,4 @@ struct SettingsSheet: View {
         SizeOption(id: "regular", name: "Regular"),
         SizeOption(id: "large", name: "Large"),
     ]
-}
-
-/// Text in the accent, no border — the design's ghost button.
-struct GhostButtonStyle: ButtonStyle {
-    let palette: Palette
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Typeface.display(12.5))
-            .foregroundStyle(palette.accentText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(palette.accent.opacity(configuration.isPressed ? 0.18 : 0))
-            )
-    }
 }

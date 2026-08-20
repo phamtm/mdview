@@ -244,24 +244,3 @@ struct SidebarRowView: View {
         }
     }
 }
-
-/// Outlined, never filled — the design is explicit about that.
-struct OutlineButtonStyle: ButtonStyle {
-    let palette: Palette
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Typeface.display(13))
-            .foregroundStyle(palette.accentText)
-            .padding(.horizontal, 13.8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(palette.accent, lineWidth: 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(palette.accent.opacity(configuration.isPressed ? 0.22 : 0))
-                    )
-            )
-    }
-}

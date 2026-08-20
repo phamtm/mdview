@@ -30,7 +30,6 @@ swiftc -O -o build/test-workspace $SRC build/workspace-tool/main.swift
 ./build/test-workspace
 
 echo "==> window chrome (real app)"
-./build.sh >/dev/null
 ./tools/check-window-chrome.sh
 
 echo "==> theme reaches the document (real app)"
@@ -56,8 +55,14 @@ MDVIEW_THEME=night ./build/snapshot Resources sample.md build/shot-night dark \
   >build/diag-night.txt
 MDVIEW_THEME=vellum ./build/snapshot Resources sample.md build/shot-vellum light \
   >build/diag-vellum.txt
+# The harness sets the webview's appearance from its own light|dark argument,
+# independent of MDVIEW_THEME, so the four runs above all have the theme and the
+# appearance agreeing. This one makes them disagree — the System theme on a dark
+# Mac — which is the case that hid the alert-colour bug.
+MDVIEW_THEME=system ./build/snapshot Resources sample.md build/shot-system dark \
+  >build/diag-system.txt
 python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
-  build/diag-night.txt build/diag-vellum.txt
+  build/diag-night.txt build/diag-vellum.txt build/diag-system.txt
 
 echo "==> contents rail preview sits beside its tick"
 MDVIEW_RAIL=hover MDVIEW_THEME=paper ./build/snapshot Resources sample.md build/shot-hover light \
@@ -85,7 +90,9 @@ import json
 raw = open("build/diag-nofm.txt").read()
 data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
 problems = []
-if data["frontmatterFields"] != 0: problems.append(f"header still shown ({data['frontmatterFields']} fields)")
+# With the setting off the document keeps no head of its own: no title, no subtitle.
+if data["frontmatterTitle"] != "none": problems.append(f"title still shown ({data['frontmatterTitle']!r})")
+if data["frontmatterSubtitle"] != "none": problems.append(f"subtitle still shown ({data['frontmatterSubtitle']!r})")
 if data["rawFrontmatterLeaked"]: problems.append("raw yaml leaked into the document")
 if data["headings"] < 8: problems.append(f"body lost headings ({data['headings']})")
 for p in problems: print(f"  FAIL {p}")

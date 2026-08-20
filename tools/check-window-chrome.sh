@@ -29,19 +29,9 @@ for expected in "titleVisibility=hidden" "fullSizeContentView=true" "titlebarTra
   esac
 done
 
-# Native scrollers follow the window's appearance, so it has to match the chosen
-# theme rather than the OS: a light theme under a dark macOS drew a white knob.
-theme="$(defaults read com.minh.mdview theme 2>/dev/null || echo system)"
-appearance="$(echo "$out" | sed -n 's/.*appearance=\([^ ]*\).*/\1/p')"
-case "$theme" in
-  night)         want="NSAppearanceNameDarkAqua" ;;
-  paper|vellum)  want="NSAppearanceNameAqua" ;;
-  *)             want="system" ;;
-esac
-if [ "$appearance" != "$want" ]; then
-  echo "  FAIL theme $theme wants appearance $want, window has $appearance"
-  fail=1
-fi
+# The window's appearance is checked in check-theme.sh, which sets each theme
+# in turn. Reading whatever theme the developer happens to have set would pass
+# without exercising anything.
 
 # Content filling the whole window frame is what removes the empty titlebar band.
 content="$(echo "$out" | sed -n 's/.*contentHeight=\([0-9]*\).*/\1/p')"
@@ -51,5 +41,5 @@ if [ "$content" != "$window" ]; then
   fail=1
 fi
 
-[ "$fail" -eq 0 ] && echo "  ok   titlebar hidden, buttons centred in the band, content full height, focus in document, appearance follows the theme ($theme)"
+[ "$fail" -eq 0 ] && echo "  ok   titlebar hidden, buttons centred in the band, content full height, focus in document"
 exit $fail

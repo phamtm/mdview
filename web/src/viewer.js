@@ -56,7 +56,13 @@ import { createRail } from "./rail.js";
       .join("/");
   }
 
-  /** Turn a markdown-relative path into something WebKit can load. */
+  /**
+   * Turn a markdown-relative path into something WebKit can load.
+   *
+   * Anything that already carries a scheme is returned untouched, `javascript:`
+   * included. That is safe only because the one caller runs after DOMPurify has
+   * already stripped such hrefs — see the call in render().
+   */
   function resolveURL(raw) {
     if (!raw) return raw;
     if (/^([a-z][a-z0-9+.\-]*:|\/\/|#|data:)/i.test(raw)) return raw;
@@ -94,6 +100,16 @@ import { createRail } from "./rail.js";
     const match = /^\uFEFF?(---|\+\+\+)[ \t]*\r?\n([\s\S]*?)\r?\n?\1[ \t]*(?:\r?\n|$)/.exec(text);
     if (!match) return { fields: [], body: text };
     return { fields: parseFields(match[2]), body: text.slice(match[0].length) };
+  }
+
+  /**
+   * Runs of anything that is not a space or a newline. The class is Swift's
+   * `Character.isNewline` set, so the number matches what the titlebar showed
+   * when Swift counted the raw file. A tab is deliberately not a separator.
+   * tools/wordcount-tests.js pins the whole set.
+   */
+  function countWords(text) {
+    return (text.match(/[^ \n\r\u000b\u000c\u0085\u2028\u2029]+/g) || []).length;
   }
 
   function unquote(value) {
@@ -577,19 +593,22 @@ import { createRail } from "./rail.js";
     applyMeasure(payload.measure);
 
     const split = splitFrontmatter(payload.markdown || "");
-    const dirty = marked.parse(split.body);
-    elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
-
-    if (split.fields.length && payload.showFrontmatter !== false) {
-      const firstHeading = elDoc.querySelector("h1");
-      const header = frontmatterHeader(split.fields, firstHeading && firstHeading.textContent);
-      if (header) elDoc.insertBefore(header, elDoc.firstChild);
-    }
 
     // The titlebar disclosure is drawn by Swift, but the parser lives here —
     // duplicating it there would be two implementations to keep in step.
+    //
+    // Sent before anything is rendered, and it depends on nothing below: a throw
+    // in marked or DOMPurify would otherwise leave the titlebar with no count and
+    // no fields at all, which is a failure mode Swift-local counting never had.
     post({
       action: "frontmatter",
+      // The titlebar's word count, of the body only. Swift used to count the raw
+      // file, frontmatter included; it cannot count the body without a second
+      // frontmatter parser, which is the thing this message exists to avoid.
+      // Separators are space and newline, exactly as Swift had them — a tab is
+      // deliberately not one, so `a\tb` stays one word. tools/wordcount-tests.js
+      // pins that.
+      words: countWords(split.body),
       // Title and subtitle are already on the page as the document's own head.
       fields: split.fields
         .filter(([name]) => !DOCUMENT_FIELDS.includes(name.toLowerCase()))
@@ -600,10 +619,21 @@ import { createRail } from "./rail.js";
         })),
     });
 
+    const dirty = marked.parse(split.body);
+    elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
+
+    if (split.fields.length && payload.showFrontmatter !== false) {
+      const firstHeading = elDoc.querySelector("h1");
+      const header = frontmatterHeader(split.fields, firstHeading && firstHeading.textContent);
+      if (header) elDoc.insertBefore(header, elDoc.firstChild);
+    }
+
     addHeadingAnchors(elDoc);
     decorateAlerts(elDoc);
     diagrams = decorateCode(elDoc);
     wrapTables(elDoc);
+    // Must stay after the sanitize above: resolveURL returns scheme-carrying
+    // hrefs unchanged, so DOMPurify is what removes `javascript:` ones.
     resolveLocalPaths(elDoc);
     markTaskItems(elDoc);
 
@@ -676,8 +706,9 @@ import { createRail } from "./rail.js";
     scrollToHeading(index) {
       rail.jumpTo(Number(index));
     },
-    // Exposed so the test harness can exercise the parser directly.
-    _internals: { splitFrontmatter, parseFields },
+    // Exposed so the test harness can exercise the parser and the word count
+    // directly.
+    _internals: { splitFrontmatter, parseFields, countWords },
     /** Called by the app when the system appearance changes. */
     refreshDiagrams() {
       if (diagrams.length) drawDiagrams(renderToken);

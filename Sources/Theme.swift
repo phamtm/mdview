@@ -6,7 +6,7 @@ import SwiftUI
 /// The document's copy of these tokens lives in `Resources/style.css`. Two
 /// tables rather than one generated file is deliberate — see DESIGN.md — so a
 /// value changed here has to be changed there too.
-enum AppTheme: String, CaseIterable {
+enum AppTheme: String {
     case paper, vellum, night, system
 
     /// Which palette to draw, resolving `system` against the current appearance.
