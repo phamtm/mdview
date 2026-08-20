@@ -282,6 +282,10 @@ import { createRail } from "./rail.js";
       });
       caption.appendChild(copy);
 
+      // Box-drawing only connects when the line box matches the glyph height.
+      // Diagrams get line-height 1; ordinary code keeps its comfortable leading.
+      if (/[\u2500-\u257f]/.test(source)) figure.classList.add("ascii");
+
       if (lang && hljs.getLanguage(lang)) {
         try {
           hljs.highlightElement(code);

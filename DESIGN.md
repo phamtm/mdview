@@ -91,6 +91,12 @@ Three implementation notes that are easy to trip over:
   colour parser rejects, and which silently killed every diagram in those two
   themes. Tokens are flattened to plain `rgb()` through a 1×1 canvas first, then
   the diagram is repainted as stroke-on-nothing.
+- **A block drawing a tree gets `line-height: 1`, on the `pre` as well as the
+  `code`.** Box-drawing characters only join up when the line box equals the glyph
+  height; at the normal 1.7 leading the verticals break into dashes. Setting it on
+  `code` alone does nothing — `code` is inline inside `pre`, so the pre's strut
+  sets the line box. `web/src/viewer.js` tags such blocks `.ascii` by testing for
+  U+2500–257F, and the render check asserts the leading matches the font size.
 - **Test every theme.** The bug above passed a suite that only rendered the
   default one. `tools/run-tests.sh` now renders all three.
 

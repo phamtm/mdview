@@ -4,9 +4,9 @@ import json, sys
 EXPECT = {
     "headings": lambda v: v >= 8,
     "headingIds": lambda v: v >= 8,
-    "codeFigures": lambda v: v == 3,
+    "codeFigures": lambda v: v == 4,
     "highlighted": lambda v: v > 0,
-    "copyButtons": lambda v: v == 3,
+    "copyButtons": lambda v: v == 4,
     "tables": lambda v: v == 1,
     "tasks": lambda v: v == 2,
     "tasksDone": lambda v: v == 1,
@@ -33,6 +33,7 @@ EXPECT = {
     "railTicks": lambda v: v >= 8,
     "railRows": lambda v: v >= 8,
     "railHidden": lambda v: v is False,
+    "asciiBlocks": lambda v: v == 1,
 }
 
 failed = False
@@ -64,6 +65,17 @@ for path in sys.argv[1:]:
     if data.get("appliedTheme") != expected_theme:
         print(f"  FAIL {path}: theme not applied — asked {expected_theme}, "
               f"page has {data.get('appliedTheme')!r}")
+        failed = True
+    # Box-drawing connects only when the line box equals the glyph height.
+    leading = str(data.get("asciiLeading", ""))
+    if " / " in leading:
+        line, size = (float(part.replace("px", "")) for part in leading.split(" / "))
+        if abs(line - size) > 0.5:
+            print(f"  FAIL {path}: ascii block leading {line}px != font size {size}px "
+                  f"— box-drawing will break into dashes")
+            failed = True
+    else:
+        print(f"  FAIL {path}: no ascii block to check ({leading})")
         failed = True
     if data.get("frontmatterSubtitle") != "A small, local Markdown viewer for macOS":
         print(f"  FAIL {path}: subtitle = {data.get('frontmatterSubtitle')!r}")

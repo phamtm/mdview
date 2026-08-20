@@ -470,6 +470,7 @@ body {
 .prose figure.code code {
   font-size: 12.5px;
   line-height: 1.7;
+  font-variant-ligatures: none;
   color: var(--neutral-800);
   background: none;
   padding: 0;
@@ -482,6 +483,15 @@ body {
   :root:not([data-theme]) .prose figure.code code {
     color: var(--strong);
   }
+}
+
+/* A block drawing a tree or box with U+2500 characters. The line box must equal
+   the glyph height or the verticals break into dashes — and it has to be set on
+   the `pre` as well: `code` is inline inside it, so the pre's strut wins. */
+.prose figure.code.ascii pre,
+.prose figure.code.ascii code {
+  line-height: 1;
+  font-variant-numeric: normal;
 }
 
 /* Syntax colours, from the design: gold carries keywords and strings, ink the

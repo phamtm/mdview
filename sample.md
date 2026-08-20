@@ -96,6 +96,18 @@ def slugify(text: str) -> str:
     return "-".join(text.lower().split())
 ```
 
+## Tree
+
+```text
+Slack @mention
+    │
+    ├── verify and deduplicate
+    └── background routing
+            │
+            ├── Redis per-thread lock
+            └── shared sidecar event stream
+```
+
 ## Diagram
 
 ```mermaid

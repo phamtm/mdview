@@ -91,6 +91,13 @@ final class Runner: NSObject, WKNavigationDelegate {
               railTicks: document.querySelectorAll('.rail-ticks .rail-tick').length,
               railRows: document.querySelectorAll('.rail-panel .rail-row').length,
               railHidden: !!document.querySelector('.rail-zone').hidden,
+              asciiBlocks: document.querySelectorAll('#doc figure.code.ascii').length,
+              asciiLeading: (function () {
+                var pre = document.querySelector('#doc figure.code.ascii pre');
+                if (!pre) return 'none';
+                var style = getComputedStyle(pre);
+                return style.lineHeight + ' / ' + style.fontSize;
+              })(),
               railCardCentre: (function () {
                 var c = document.querySelector('.rail-card');
                 if (!c || c.hidden) return -1;
