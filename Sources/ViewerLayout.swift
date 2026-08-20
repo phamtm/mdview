@@ -9,11 +9,12 @@ struct ViewerView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
     @AppStorage("sidebarVisible") private var sidebarVisible = true
     @AppStorage("sidebarWidth") private var storedWidth = ViewerView.sidebarDefaultWidth
-    @State private var widthAtDragStart: CGFloat?
+    @AppStorage("outlineWidth") private var outlineWidth = ViewerView.outlineDefaultWidth
     @AppStorage("theme") private var themeName = AppTheme.system.rawValue
     @AppStorage("size") private var sizeName = "regular"
     @AppStorage("alignment") private var alignmentName = "justify"
     @AppStorage("measure") private var measureWidth = RenderPayload.defaultMeasure
+    @State private var rowWidth: CGFloat = 0
     @State private var showSettings = false
     @State private var showFrontmatter = false
     @AppStorage("outlineVisible") private var outlineVisible = false
@@ -33,13 +34,20 @@ struct ViewerView: View {
     /// guessed — see DESIGN.md.
     static let titlebarHeight: CGFloat = 52
     static let sidebarDefaultWidth = Double(SidebarView.width)
+    static let sidebarWidthRange: ClosedRange<Double> = 170...460
+    static let outlineDefaultWidth = Double(OutlinePanel.defaultWidth)
+    /// Narrower floor than the sidebar's: the deepest heading indent plus room
+    /// for a word or two of its title.
+    static let outlineWidthRange: ClosedRange<Double> = 160...460
+    /// The document never gets squeezed below this, whatever the panels want.
+    static let documentMinWidth: CGFloat = 420
 
     var body: some View {
         VStack(spacing: 0) {
             TitleBar(
                 name: doc.url?.lastPathComponent,
                 meta: documentMeta,
-                sidebarWidth: sidebarVisible ? storedWidth : ViewerView.collapsedZone,
+                sidebarWidth: sidebarVisible ? sidebarWidth : ViewerView.collapsedZone,
                 sidebarVisible: sidebarVisible,
                 canCopy: Viewer.isMarkdown(doc.url),
                 outlineOpen: outlineVisible,
@@ -55,27 +63,46 @@ struct ViewerView: View {
             HStack(spacing: 0) {
                 if sidebarVisible {
                     SidebarView(workspace: workspace, doc: doc, palette: palette)
-                        .frame(width: storedWidth)
-                        .overlay(alignment: .trailing) { resizeHandle }
+                        .frame(width: sidebarWidth)
                         .overlay(alignment: .trailing) {
                             Rectangle().fill(palette.divider).frame(width: 1)
+                        }
+                        .overlay(alignment: .trailing) {
+                            ResizeHandle(
+                                width: $storedWidth, edge: .trailing,
+                                range: ViewerView.sidebarWidthRange.lowerBound...sidebarLimit)
                         }
                         .transition(.move(edge: .leading).combined(with: .opacity))
                         .zIndex(1)
                 }
 
                 ViewerWebView(doc: doc, background: palette.bg)
-                    .frame(minWidth: 420, minHeight: 320)
+                    .frame(minWidth: ViewerView.documentMinWidth, minHeight: 320)
 
                 if outlineVisible {
-                    OutlinePanel(outline: doc.outline, palette: palette) { index in
+                    OutlinePanel(
+                        outline: doc.outline, palette: palette, width: contentsWidth
+                    ) { index in
                         NotificationCenter.default.post(
                             name: .mdvScrollToHeading, object: index as NSNumber)
                     }
                     .overlay(alignment: .leading) {
                         Rectangle().fill(palette.divider).frame(width: 1)
                     }
+                    .overlay(alignment: .leading) {
+                        ResizeHandle(
+                            width: $outlineWidth, edge: .leading,
+                            range: ViewerView.outlineWidthRange.lowerBound...contentsLimit)
+                    }
                     .transition(.move(edge: .trailing))
+                }
+            }
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onChange(of: geo.size.width, initial: true) { _, width in
+                            rowWidth = width
+                        }
                 }
             }
         }
@@ -129,6 +156,10 @@ struct ViewerView: View {
         // around it. Inherited by every descendant.
         .focusEffectDisabled()
         .background(WindowChrome(background: palette.bg))
+        // Not cosmetic: this is what makes AppKit draw its own parts — the
+        // scrollers in both panels above all — in the theme's tone rather than
+        // the OS's. See `themeColorScheme`.
+        .preferredColorScheme(themeColorScheme)
         .onAppear {
             // The old default (238) was set before DESIGN.md; move anyone still on
             // it to the new one. A width the user actually chose is left alone.
@@ -154,8 +185,49 @@ struct ViewerView: View {
         }
     }
 
+    // A panel is capped by what the window can spare: the other panel, plus the
+    // document's minimum. Past that the HStack has to squeeze someone, and the
+    // seam jumps around under the pointer mid-drag.
+    // Each reads the other's *stored* width, not its clamped one: clamped widths
+    // are defined in terms of these limits, and the pair would recurse forever.
+    private var sidebarLimit: Double {
+        limit(ViewerView.sidebarWidthRange, sharing: outlineVisible ? outlineWidth : 0)
+    }
+
+    private var contentsLimit: Double {
+        limit(ViewerView.outlineWidthRange, sharing: sidebarVisible ? storedWidth : 0)
+    }
+
+    private func limit(_ range: ClosedRange<Double>, sharing other: Double) -> Double {
+        guard rowWidth > 0 else { return range.upperBound }
+        let spare = rowWidth - other - ViewerView.documentMinWidth
+        return min(range.upperBound, max(range.lowerBound, spare))
+    }
+
+    /// What each panel is drawn at: the stored width, held to the current limit.
+    /// The stored value is left alone, so making the window roomy again restores
+    /// the width the reader chose.
+    private var sidebarWidth: Double { min(storedWidth, sidebarLimit) }
+    private var contentsWidth: Double { min(outlineWidth, contentsLimit) }
+
     private var palette: Palette {
         (AppTheme(rawValue: themeName) ?? .system).palette(dark: colorScheme == .dark)
+    }
+
+    /// Native scrollers take their colour from the window's appearance, not from
+    /// our palette, so a light theme under a dark macOS drew a white knob on cream
+    /// paper. Pinning the window to the theme's tone fixes the scrollers in both
+    /// panels, and everything else AppKit draws for itself.
+    ///
+    /// System stays nil deliberately: pinning it would freeze the app in whichever
+    /// tone it launched in, since `colorScheme` — which is how System resolves —
+    /// reads back from this.
+    private var themeColorScheme: ColorScheme? {
+        switch AppTheme(rawValue: themeName) ?? .system {
+        case .system: return nil
+        case .night: return .dark
+        case .paper, .vellum: return .light
+        }
     }
 
     /// The design shows a word count under the filename.
@@ -174,32 +246,46 @@ struct ViewerView: View {
         withAnimation(.easeOut(duration: 0.2)) { sidebarVisible.toggle() }
     }
 
-    /// A wide-enough grab area sitting on the seam, drawing nothing.
-    private var resizeHandle: some View {
-        Rectangle()
-            .fill(Color.clear)
-            .frame(width: 9)
-            .contentShape(Rectangle())
-            .offset(x: 4)
-            .onHover { inside in
-                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        let start = widthAtDragStart ?? storedWidth
-                        if widthAtDragStart == nil { widthAtDragStart = storedWidth }
-                        storedWidth = min(max(start + value.translation.width, 170), 460)
-                    }
-                    .onEnded { _ in widthAtDragStart = nil }
-            )
-    }
-
     /// The containing folder, with $HOME shortened to "~".
     private var folder: String {
         guard let dir = doc.url?.deletingLastPathComponent().path else { return "" }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return dir.hasPrefix(home) ? "~" + dir.dropFirst(home.count) : dir
+    }
+}
+
+/// A wide-enough grab area sitting on a panel's seam, drawing nothing.
+///
+/// `edge` is the side of the panel it sits on, which is also the direction a
+/// drag has to go to make that panel wider.
+struct ResizeHandle: View {
+    @Binding var width: Double
+    let edge: HorizontalEdge
+    let range: ClosedRange<Double>
+    @State private var widthAtDragStart: Double?
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 9)
+            .contentShape(Rectangle())
+            // Straddling the seam: half the grab area sits over the document.
+            .offset(x: edge == .trailing ? 4 : -4)
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let start = widthAtDragStart ?? width
+                        if widthAtDragStart == nil { widthAtDragStart = width }
+                        let grown =
+                            edge == .trailing
+                            ? value.translation.width : -value.translation.width
+                        width = min(max(start + grown, range.lowerBound), range.upperBound)
+                    }
+                    .onEnded { _ in widthAtDragStart = nil }
+            )
     }
 }
 
@@ -407,8 +493,10 @@ final class WindowStyler {
                     format: "#%02x%02x%02x", Int($0.redComponent * 255),
                     Int($0.greenComponent * 255), Int($0.blueComponent * 255))
             } ?? "none"
+        let appearance = window.appearance?.name.rawValue ?? "system"
         return [
             "windowBg=\(windowBackground)",
+            "appearance=\(appearance)",
             "buttonCentre=\(Int(buttonCentre.rounded()))",
             "firstResponder=\(responder)",
             "titleVisibility=\(window.titleVisibility == .hidden ? "hidden" : "visible")",

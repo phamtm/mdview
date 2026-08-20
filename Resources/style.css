@@ -104,6 +104,7 @@
   --accent: var(--accent-500);
   --accent-text: var(--accent-600);
   --code-bg: var(--surface);
+  color-scheme: light;
 }
 
 :root[data-theme="vellum"] {
@@ -116,6 +117,7 @@
   --accent: var(--accent-600);
   --accent-text: var(--accent-800);
   --code-bg: var(--surface);
+  color-scheme: light;
 }
 
 :root[data-theme="night"] {
@@ -128,6 +130,7 @@
   --accent: var(--accent-400);
   --accent-text: var(--accent-300);
   --code-bg: var(--surface);
+  color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -141,6 +144,7 @@
     --accent: var(--accent-400);
     --accent-text: var(--accent-300);
     --code-bg: var(--surface);
+    color-scheme: dark;
   }
 }
 
@@ -181,20 +185,6 @@ body {
 
 ::selection {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text) 22%, transparent);
-  border: 3px solid transparent;
-  border-radius: 6px;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 /* --- the column ---------------------------------------------------------- */

@@ -64,6 +64,7 @@ instead and need no correction — those still use `Typeface.display` directly.
 | Left zone, sidebar closed | 136.4pt = buttons (69) + `--space-6` + toggle (26) + inset (13.8) |
 | Sidebar | 258pt default (drag 170–460), surface 62% over bg, hairline right edge |
 | Sidebar row | 27pt, 16pt indent per level, 4pt radius |
+| Contents panel | 244pt default (drag 160–460), same surface, hairline left edge |
 | Document column | 700pt measure at 17px (640/15 small, 760/19 large) |
 | Column padding | 72pt top, 36.8pt sides, 120pt bottom |
 
@@ -101,6 +102,18 @@ Three implementation notes that are easy to trip over:
   colours, those two read as a black edge and a black overscroll band in Colophon.
   `tools/check-theme.sh` asks the running app for both and fails if they drift from
   the theme.
+- **The window's appearance has to follow the theme, not the OS.** AppKit draws
+  scrollers, carets and selections in the *system* tone, so Vellum under a dark
+  macOS drew a white scroller knob on cream paper. `ViewerView` pins the window
+  with `.preferredColorScheme` — nil for System, which must stay nil: `colorScheme`
+  is how System resolves, so pinning it would freeze the app in whichever tone it
+  launched in. `tools/check-window-chrome.sh` asserts the window's appearance
+  matches the stored theme.
+- **Scrollbars are the system's, deliberately.** Styling `::-webkit-scrollbar` in
+  the page opts WebKit out of macOS overlay scrollbars, so the document carried a
+  permanent grey bar that also stole 10px from the measure on every reflow. The
+  skin is gone; `color-scheme` per theme is what tells WebKit which tone to draw
+  the native bar in.
 - **Fonts ship twice too.** The page loads woff2 (small, and all WebKit needs);
   the chrome needs real TTFs, because CoreText cannot register woff2. Both sit in
   `Resources/fonts/`, and neither can come from Google's CDN — the page's CSP
@@ -201,6 +214,20 @@ Two pieces, with different jobs:
 - **The contents panel** (`Sources/OutlinePanel.swift`) is the navigable list, on
   the **right**, toggled from the titlebar or `⌥⌘O`. Left answers "where am I in my
   files"; right answers "where am I in this document".
+
+Both panels are resized by dragging their inner seam, and both remember the width
+(`sidebarWidth`, `outlineWidth`). One `ResizeHandle` in `ViewerLayout.swift` serves
+both: an invisible 9pt strip straddling the seam, told which edge it sits on.
+
+Two things that made the seam judder, both fixed and both easy to reintroduce:
+
+- **Measure the drag in `.global` space.** The handle rides the edge it resizes, so
+  in the default local space a panel growing by 10pt moved the pointer 10pt left in
+  the handle's own coordinates — the drag fed back on itself, frame by frame.
+- **Cap a panel by what the window can spare** (the other panel plus
+  `documentMinWidth`). Past that the `HStack` has to squeeze someone, and the seam
+  jumps out from under the pointer. The cap limits the drag and the width drawn,
+  never the stored width — widen the window and the reader's choice comes back.
 
 The design has the rail expand into a contents panel after dwelling two seconds in
 its zone. That is gone: an outline you have to know about, and then wait for, is

@@ -22,9 +22,11 @@ struct Outline {
 struct OutlinePanel: View {
     let outline: Outline
     let palette: Palette
+    /// Set by the reader, by dragging the panel's inner edge.
+    var width: CGFloat = OutlinePanel.defaultWidth
     let jump: (Int) -> Void
 
-    static let width: CGFloat = 244
+    static let defaultWidth: CGFloat = 244
     private static let pad: CGFloat = 18.4
     private static let gap: CGFloat = 13.8
 
@@ -34,7 +36,7 @@ struct OutlinePanel: View {
             if outline.headings.isEmpty { emptyState } else { rows }
             Spacer(minLength: 0)
         }
-        .frame(width: Self.width)
+        .frame(width: width)
         .background(palette.sidebar)
     }
 
