@@ -69,6 +69,8 @@ struct ViewerCommands: Commands {
     @ObservedObject var doc: DocumentModel
     @ObservedObject var workspace: WorkspaceModel
     @AppStorage("showFrontmatter") private var showFrontmatter = true
+    @AppStorage("theme") private var theme = "system"
+    @AppStorage("size") private var size = "regular"
 
     private func send(_ name: Notification.Name) {
         NotificationCenter.default.post(name: name, object: nil)
@@ -145,8 +147,6 @@ struct ViewerCommands: Commands {
                     set: {
                         showFrontmatter = $0; send(.mdvSettingsChanged)
                     }))
-            Button("Toggle Serif Reading Font") { send(.mdvToggleFont) }
-                .keyboardShortcut("s", modifiers: [.command, .option])
         }
     }
 }

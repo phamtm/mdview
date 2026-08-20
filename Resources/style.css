@@ -1,55 +1,154 @@
 /* ---------------------------------------------------------------------------
-   MDView stylesheet.
-   Light is warm paper, dark is warm near-black. One measure, one rhythm:
-   every vertical space is a multiple of the body line-height.
+   MDView — the Classical design system, applied to the document surface.
+   Tokens, ramps and component treatments follow the Markdown Viewer design;
+   see DESIGN.md. Editorial: serif type, justified columns, hairlines carrying
+   the structure, and a single gold accent used as stroke and rule, never fill.
    --------------------------------------------------------------------------- */
 
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/CormorantGaramond-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url("fonts/CormorantGaramond-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/CormorantGaramond-400-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/Lora-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url("fonts/Lora-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/Lora-400-italic.woff2") format("woff2");
+}
+
 :root {
-  --sans: ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
-  --display: ui-sans-serif, -apple-system, "SF Pro Display", system-ui, sans-serif;
-  --serif: ui-serif, "New York", Charter, Georgia, serif;
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --font-heading: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-body: "Lora", ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --measure: 43rem;
-  --gutter: 3.25rem;
-  --radius: 10px;
+  /* Tonal ramps — one shared perceptual lightness scale. */
+  --neutral-100: #f8f4f4;
+  --neutral-200: #eae7e7;
+  --neutral-300: #d7d3d3;
+  --neutral-400: #bab6b6;
+  --neutral-600: #7d7979;
+  --neutral-800: #444141;
+  --neutral-900: #2d2b2b;
 
-  --bg: #fdfdfc;
-  --bg-soft: #f5f5f2;
-  --bg-code: #f7f7f4;
-  --fg: #1b1b19;
-  --fg-muted: #6c6c66;
-  --fg-faint: #97978f;
-  --rule: #e7e7e1;
-  --rule-soft: #efefea;
-  --rule-strong: #d5d5cd;
-  --accent: #3059c9;
-  --accent-soft: rgba(48, 89, 201, 0.09);
-  --mark: rgba(255, 214, 76, 0.45);
-  --shadow: 0 1px 2px rgba(20, 20, 16, 0.05), 0 8px 24px rgba(20, 20, 16, 0.07);
+  --accent-100: #fff3e4;
+  --accent-200: #ffe3bf;
+  --accent-300: #facb8d;
+  --accent-400: #e1ad66;
+  --accent-500: #c28d41;
+  --accent-600: #a06f24;
+  --accent-800: #5a3b0a;
+  --accent-900: #3a270d;
+
+  --space-1: 4.6px;
+  --space-2: 9.2px;
+  --space-3: 13.8px;
+  --space-4: 18.4px;
+  --space-6: 27.6px;
+  --space-8: 36.8px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+
+  /* Set by the size options. */
+  --body-size: 17px;
+  --measure: 700px;
+}
+
+/* --- themes --------------------------------------------------------------
+   Paper, Vellum and Colophon, exactly as the design defines them. The default
+   follows the system appearance; an explicit choice wins.
+   ------------------------------------------------------------------------- */
+
+:root,
+:root[data-theme="paper"] {
+  --bg: var(--neutral-100);
+  --text: var(--neutral-900);
+  --surface: var(--neutral-200);
+  --divider: color-mix(in srgb, var(--neutral-900) 16%, transparent);
+  --muted: color-mix(in srgb, var(--neutral-900) 64%, transparent);
+  --strong: var(--neutral-900);
+  --accent: var(--accent-500);
+  --accent-text: var(--accent-600);
+  --code-bg: var(--surface);
+}
+
+:root[data-theme="vellum"] {
+  --bg: color-mix(in srgb, var(--accent-100) 66%, var(--neutral-100));
+  --text: var(--accent-900);
+  --surface: color-mix(in srgb, var(--accent-200) 42%, var(--neutral-100));
+  --divider: color-mix(in srgb, var(--accent-900) 22%, transparent);
+  --muted: color-mix(in srgb, var(--accent-900) 62%, transparent);
+  --strong: var(--accent-900);
+  --accent: var(--accent-600);
+  --accent-text: var(--accent-800);
+  --code-bg: var(--surface);
+}
+
+:root[data-theme="night"] {
+  --bg: color-mix(in srgb, var(--neutral-900) 80%, #000);
+  --text: color-mix(in srgb, var(--neutral-100) 92%, transparent);
+  --surface: color-mix(in srgb, var(--neutral-900) 88%, #fff);
+  --divider: color-mix(in srgb, var(--neutral-100) 18%, transparent);
+  --muted: var(--neutral-400);
+  --strong: var(--neutral-200);
+  --accent: var(--accent-400);
+  --accent-text: var(--accent-300);
+  --code-bg: var(--surface);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a1c;
-    --bg-soft: #212124;
-    --bg-code: #202023;
-    --fg: #e9e9e5;
-    --fg-muted: #a2a29b;
-    --fg-faint: #74746d;
-    --rule: #2e2e32;
-    --rule-soft: #26262a;
-    --rule-strong: #3c3c43;
-    --accent: #86a8ff;
-    --accent-soft: rgba(134, 168, 255, 0.13);
-    --mark: rgba(255, 214, 76, 0.3);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.4);
+  :root:not([data-theme]) {
+    --bg: color-mix(in srgb, var(--neutral-900) 80%, #000);
+    --text: color-mix(in srgb, var(--neutral-100) 92%, transparent);
+    --surface: color-mix(in srgb, var(--neutral-900) 88%, #fff);
+    --divider: color-mix(in srgb, var(--neutral-100) 18%, transparent);
+    --muted: var(--neutral-400);
+    --strong: var(--neutral-200);
+    --accent: var(--accent-400);
+    --accent-text: var(--accent-300);
+    --code-bg: var(--surface);
   }
 }
 
-* {
-  box-sizing: border-box;
-}
+/* Text size options. */
+:root[data-size="small"] { --body-size: 15px; --measure: 640px; }
+:root[data-size="large"] { --body-size: 19px; --measure: 760px; }
+
+* { box-sizing: border-box; }
 
 html {
   scroll-behavior: smooth;
@@ -60,433 +159,528 @@ html {
 body {
   margin: 0;
   background: var(--bg);
-  color: var(--fg);
-  font-family: var(--sans);
-  font-size: 16.5px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
   line-height: 1.72;
-  font-feature-settings:
-    "kern" 1,
-    "liga" 1;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
-body.serif .prose {
-  font-family: var(--serif);
-  font-size: 18px;
-  line-height: 1.76;
-}
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 
-body.serif .prose h1,
-body.serif .prose h2,
-body.serif .prose h3,
-body.serif .prose h4 {
-  font-family: var(--serif);
-  letter-spacing: -0.005em;
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
 }
+::-webkit-scrollbar-track { background: transparent; }
 
-::selection {
-  background: var(--accent-soft);
-}
-
-/* --- document ------------------------------------------------------------- */
+/* --- the column ---------------------------------------------------------- */
 
 .prose {
   max-width: var(--measure);
   margin: 0 auto;
-  padding: 2.2rem var(--gutter) 8rem;
+  padding: 72px var(--space-8) 120px;
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
   opacity: 0;
   transition: opacity 0.14s ease-out;
 }
 
-.prose.ready {
-  opacity: 1;
-}
+.prose.ready { opacity: 1; }
+.prose > :first-child { margin-top: 0; }
+.prose p { margin: 0 0 var(--space-4); }
 
-.prose > :first-child {
-  margin-top: 0;
-}
-
-.prose p {
-  margin: 0 0 1.2em;
-}
-
+/* Headings run flush left over the justified column. */
 .prose h1,
 .prose h2,
 .prose h3,
 .prose h4,
 .prose h5,
 .prose h6 {
-  font-family: var(--display);
-  line-height: 1.25;
+  font-family: var(--font-heading);
+  text-align: left;
   text-wrap: balance;
-  margin: 2.1em 0 0.65em;
   scroll-margin-top: 1.5rem;
 }
 
 .prose h1 {
-  font-size: 2.15rem;
-  font-weight: 700;
-  letter-spacing: -0.022em;
-  margin: 0 0 1.1em;
+  font-weight: 400;
+  font-size: 52px;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-3);
 }
 
+/* A hairline above each section is what carries the structure. */
 .prose h2 {
-  font-size: 1.5rem;
-  font-weight: 650;
-  letter-spacing: -0.016em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--rule-soft);
+  font-weight: 600;
+  font-size: 27px;
+  line-height: 1.15;
+  margin: var(--space-8) 0 var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--divider);
 }
 
 .prose h3 {
-  font-size: 1.2rem;
-  font-weight: 640;
-  letter-spacing: -0.011em;
-}
-.prose h4 {
-  font-size: 1.02rem;
-  font-weight: 650;
-}
-.prose h5 {
-  font-size: 0.94rem;
-  font-weight: 650;
-  color: var(--fg-muted);
-}
-.prose h6 {
-  font-size: 0.8rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--fg-faint);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.2;
+  margin: var(--space-6) 0 var(--space-2);
 }
 
-/* Hover-reveal anchor, like a good docs site. */
+.prose h4 {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.25;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.prose h5 { font-weight: 600; font-size: 14px; margin: var(--space-4) 0 var(--space-1); }
+
+.prose h6 {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: var(--space-4) 0 var(--space-1);
+}
+
 .prose .anchor {
   position: absolute;
   margin-left: -1.15em;
   width: 1.15em;
-  color: var(--fg-faint);
+  color: var(--muted);
   text-decoration: none;
+  border: 0;
   opacity: 0;
   transition: opacity 0.12s ease;
-  font-weight: 400;
 }
 .prose h1:hover .anchor,
 .prose h2:hover .anchor,
 .prose h3:hover .anchor,
-.prose h4:hover .anchor {
-  opacity: 1;
-}
+.prose h4:hover .anchor { opacity: 1; }
 
+/* Colour arrives as a rule under the link, not as a fill. */
 .prose a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.18em;
-  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  transition: text-decoration-color 0.12s ease;
+  color: var(--accent-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-300);
 }
-.prose a:hover {
-  text-decoration-color: var(--accent);
-}
+.prose a:hover { color: var(--accent-600); border-bottom-color: var(--accent); }
 
-.prose strong {
-  font-weight: 650;
-}
-.prose em {
-  font-style: italic;
-}
-.prose del {
-  color: var(--fg-faint);
-}
+.prose em { font-style: italic; }
+.prose strong { font-weight: 600; }
+.prose del { color: var(--muted); }
 .prose mark {
-  background: var(--mark);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
   color: inherit;
   padding: 0.05em 0.15em;
-  border-radius: 3px;
 }
-.prose small {
-  font-size: 0.86em;
-  color: var(--fg-muted);
-}
+.prose small { font-size: 0.86em; color: var(--muted); }
 
 .prose hr {
-  border: 0;
   height: 1px;
-  background: var(--rule);
-  margin: 3em 0;
+  border: 0;
+  margin: var(--space-4) 0;
+  background: var(--divider);
 }
 
-/* --- lists ---------------------------------------------------------------- */
+/* --- lists --------------------------------------------------------------- */
 
 .prose ul,
-.prose ol {
-  margin: 0 0 1.2em;
-  padding-left: 1.45em;
-}
-.prose li {
-  margin: 0.28em 0;
-}
+.prose ol { margin: 0 0 var(--space-6); padding-left: var(--space-6); text-align: left; }
+.prose li { margin-bottom: var(--space-1); }
 .prose li > ul,
-.prose li > ol {
-  margin: 0.28em 0 0.35em;
-}
-.prose ul {
-  list-style: none;
-}
-.prose ul > li {
-  position: relative;
-}
-.prose ul > li::before {
-  content: "";
-  position: absolute;
-  left: -0.95em;
-  top: 0.72em;
-  width: 5.5px;
-  height: 5.5px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--fg) 42%, transparent);
-}
-.prose ul ul > li::before {
-  background: transparent;
-  border: 1px solid var(--fg-faint);
-}
-.prose ol {
-  list-style: decimal;
-}
-.prose ol > li::marker {
-  color: var(--fg-faint);
-  font-variant-numeric: tabular-nums;
-}
+.prose li > ol { margin: var(--space-1) 0 0; }
+.prose ol > li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.prose ul > li::marker { color: var(--muted); }
 
-/* task lists */
-.prose li.task {
-  padding-left: 0.15em;
-}
-.prose li.task::before {
-  display: none;
-}
+.prose li.task { list-style: none; }
 .prose li.task input[type="checkbox"] {
   appearance: none;
-  width: 1.02em;
-  height: 1.02em;
-  margin: 0 0.55em 0 -1.6em;
-  vertical-align: -0.14em;
-  border: 1.5px solid var(--rule);
-  border-radius: 4px;
-  background: var(--bg-soft);
+  width: 0.92em;
+  height: 0.92em;
+  margin: 0 0.5em 0 -1.5em;
+  vertical-align: -0.06em;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
 }
 .prose li.task input[type="checkbox"]:checked {
-  background: var(--accent);
   border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--bg);
+  background: var(--accent);
 }
-.prose li.task input[type="checkbox"]:checked::after {
-  content: "";
-  display: block;
-  width: 0.28em;
-  height: 0.55em;
-  margin: 0.1em 0 0 0.3em;
-  border: solid #fff;
-  border-width: 0 1.8px 1.8px 0;
-  transform: rotate(42deg);
-}
-.prose li.task.done {
-  color: var(--fg-muted);
-}
+.prose li.task.done { color: var(--muted); }
 
-/* --- quotes --------------------------------------------------------------- */
+/* --- quotes -------------------------------------------------------------- */
 
 .prose blockquote {
-  margin: 1.5em 0;
-  padding: 0.1em 0 0.1em 1.15em;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--rule));
-  color: var(--fg-muted);
+  margin: 0 0 var(--space-6);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--accent);
+  text-align: left;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: 1.35;
+  font-style: italic;
+  color: var(--strong);
 }
-.prose blockquote > :last-child {
-  margin-bottom: 0;
-}
+.prose blockquote > :last-child { margin-bottom: 0; }
 
-/* --- code ----------------------------------------------------------------- */
+/* --- code ---------------------------------------------------------------- */
 
 .prose code {
-  font-family: var(--mono);
-  font-size: 0.865em;
-  background: var(--bg-code);
-  border: 1px solid var(--rule-soft);
-  border-radius: 5px;
-  padding: 0.08em 0.28em;
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  color: var(--strong);
 }
 
+.prose :not(pre) > code {
+  padding: 0.1em 0.32em;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+
+/* A bordered figure with a hairline caption bar carrying the language. */
 .prose figure.code {
-  position: relative;
-  margin: 1.6em 0;
-  background: var(--bg-code);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--radius);
+  margin: 0 0 var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
   overflow: hidden;
+  text-align: left;
 }
 
-.prose figure.code pre {
+.prose figure.code figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 7px var(--space-3);
+  border-bottom: 1px solid var(--divider);
   margin: 0;
-  padding: 1.05rem 4.4rem 1.05rem 1.15rem;
-  overflow-x: auto;
-  line-height: 1.6;
-}
-
-.prose figure.code code {
-  font-size: 0.845em;
-  background: none;
-  border: 0;
-  padding: 0;
-  border-radius: 0;
-  -webkit-font-smoothing: auto;
 }
 
 .prose figure.code .lang {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.6rem;
-  font-family: var(--sans);
-  font-size: 0.68rem;
-  letter-spacing: 0.05em;
+  font-family: var(--font-heading);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--fg-faint);
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-  background: var(--bg-code);
-  padding-left: 0.5rem;
+  color: var(--accent-text);
 }
 
 .prose figure.code .copy {
-  position: absolute;
-  top: 0.42rem;
-  right: 0.42rem;
-  font-family: var(--sans);
-  font-size: 0.72rem;
-  color: var(--fg-muted);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 0.18rem 0.5rem;
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
   opacity: 0;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease;
+  transition: opacity 0.12s ease, color 0.12s ease;
   cursor: default;
 }
-.prose figure.code:hover .copy {
-  opacity: 1;
-}
-.prose figure.code:hover .lang {
-  opacity: 0;
-}
-.prose figure.code .copy:hover {
-  color: var(--fg);
-}
-.prose figure.code .copy.done {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+.prose figure.code:hover .copy { opacity: 1; }
+.prose figure.code .copy:hover { color: var(--accent-text); }
+.prose figure.code .copy.done { color: var(--accent-text); border-color: var(--accent); }
 
-/* --- tables --------------------------------------------------------------- */
-
-.prose .table-wrap {
-  margin: 1.6em 0;
+.prose figure.code pre {
+  margin: 0;
+  padding: var(--space-4);
   overflow-x: auto;
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--radius);
 }
+
+.prose figure.code code {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--neutral-800);
+  background: none;
+  padding: 0;
+}
+
+:root[data-theme="night"] .prose figure.code code { color: var(--strong); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .prose figure.code code { color: var(--strong); }
+}
+
+/* Syntax colours, from the design: gold carries keywords and strings, ink the
+   names, and comments go faint and italic. Nothing is bolder than semibold. */
+.prose .hljs-comment,
+.prose .hljs-quote { color: var(--muted); font-style: italic; }
+.prose .hljs-keyword,
+.prose .hljs-built_in,
+.prose .hljs-literal,
+.prose .hljs-meta { color: var(--accent-text); font-weight: 600; }
+.prose .hljs-selector-tag,
+.prose .hljs-attribute,
+.prose .hljs-attr,
+.prose .hljs-property,
+.prose .hljs-title { color: var(--strong); font-weight: 600; }
+.prose .hljs-selector-class,
+.prose .hljs-selector-pseudo,
+.prose .hljs-selector-id,
+.prose .hljs-name,
+.prose .hljs-symbol { color: var(--accent-text); }
+.prose .hljs-string { color: var(--accent-text); font-style: italic; }
+.prose .hljs-number,
+.prose .hljs-variable,
+.prose .hljs-params { color: var(--strong); }
+.prose .hljs-punctuation,
+.prose .hljs-operator,
+.prose .hljs-bullet { color: var(--muted); }
+
+/* --- tables -------------------------------------------------------------- */
+
+.prose .table-wrap { margin: 0 0 var(--space-6); overflow-x: auto; }
 
 .prose table {
-  border-collapse: collapse;
   width: 100%;
-  font-size: 0.94em;
+  border-collapse: collapse;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-}
-
-.prose thead th {
-  font-family: var(--sans);
-  font-size: 0.74rem;
-  font-weight: 620;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
   text-align: left;
-  background: var(--bg-soft);
-  white-space: nowrap;
 }
 
-.prose th,
+.prose th {
+  text-align: left;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--divider);
+}
+
 .prose td {
-  padding: 0.6rem 0.9rem;
-  border-bottom: 1px solid var(--rule-soft);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--divider);
+  text-align: left;
 }
 
-.prose tbody tr:last-child td {
-  border-bottom: 0;
-}
-.prose tbody tr:hover {
-  background: color-mix(in srgb, var(--fg) 3%, transparent);
-}
+.prose tbody tr:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
 
-/* --- media ---------------------------------------------------------------- */
+/* --- media --------------------------------------------------------------- */
 
+/* Photographs sit matted, like a tipped-in plate. */
 .prose img {
+  display: block;
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
-  margin: 0.4em 0;
+  margin: 0 auto var(--space-6);
+  border: 6px solid var(--surface);
+  outline: 1px solid var(--divider);
+  filter: sepia(0.22) saturate(0.82) contrast(1.05);
+}
+
+.prose figure.diagram {
+  margin: 0 0 var(--space-6);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.prose figure.diagram figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px var(--space-3);
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface);
+  margin: 0;
+}
+
+.prose figure.diagram .lang {
+  font-family: var(--font-heading);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-text);
 }
 
 .prose .mermaid {
-  margin: 1.8em 0;
-  text-align: center;
-  overflow-x: auto;
+  padding: var(--space-6) var(--space-4);
+  display: flex;
+  justify-content: center;
+  background: var(--bg);
 }
-.prose .mermaid svg {
-  max-width: 100%;
-  height: auto;
-}
+.prose .mermaid svg { max-width: 100%; height: auto; }
 
 .prose details {
-  margin: 1.4em 0;
-  padding: 0.85rem 1.05rem;
-  background: var(--bg-soft);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--radius);
+  margin: 0 0 var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  text-align: left;
 }
-.prose summary {
-  cursor: default;
-  font-weight: 600;
-}
-.prose details[open] summary {
-  margin-bottom: 0.7em;
-}
+.prose summary { cursor: default; font-family: var(--font-heading); font-weight: 600; }
+.prose details[open] summary { margin-bottom: var(--space-2); }
 
 .prose kbd {
-  font-family: var(--sans);
-  font-size: 0.78em;
-  padding: 0.15em 0.4em;
-  border: 1px solid var(--rule);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: var(--bg-soft);
-  color: var(--fg-muted);
+  font-family: var(--font-heading);
+  font-size: 0.8em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
 }
 
 .prose .error {
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: #c1443b;
-  background: rgba(193, 68, 59, 0.08);
-  border: 1px solid rgba(193, 68, 59, 0.25);
-  border-radius: var(--radius);
-  padding: 0.9rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: #a4342b;
+  border: 1px solid color-mix(in srgb, #a4342b 40%, transparent);
+  border-left: 2px solid #a4342b;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
 }
 
-/* --- empty state ---------------------------------------------------------- */
+/* --- frontmatter --------------------------------------------------------- */
+
+.prose .frontmatter {
+  margin: 0 0 var(--space-8);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--accent);
+  text-align: left;
+}
+
+.prose .fm-title {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 52px;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-2);
+}
+
+.prose .fm-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--space-4);
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.prose .fm-fields dt {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 7px 0 5px;
+  border-bottom: 1px solid var(--divider);
+  white-space: nowrap;
+}
+.prose .fm-fields dt:last-of-type,
+.prose .fm-fields dd:last-of-type { border-bottom: 0; }
+
+.prose .fm-fields dd {
+  margin: 0 0 0 0;
+  padding: 5px 0;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--strong);
+}
+.prose .fm-fields dd:last-child { border-bottom: 0; }
+
+/* Tags are outlined, never filled. */
+.prose .fm-pill {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: calc(var(--radius-md) * 0.75);
+  color: var(--accent-text);
+}
+
+/* --- alerts -------------------------------------------------------------- */
+
+.prose blockquote.alert {
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  font-style: normal;
+  line-height: 1.72;
+  color: var(--text);
+  border-left-color: var(--alert, var(--accent));
+}
+
+.prose .alert-label {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--alert, var(--accent-text));
+  margin: 0 0 var(--space-1);
+}
+
+.prose .alert-note { --alert: var(--accent-600); }
+.prose .alert-tip { --alert: #4a6b3f; }
+.prose .alert-important { --alert: #6b4a7a; }
+.prose .alert-warning { --alert: #8a6226; }
+.prose .alert-caution { --alert: #a4342b; }
+
+:root[data-theme="night"] .prose .alert-tip { --alert: #8fae84; }
+:root[data-theme="night"] .prose .alert-important { --alert: #b795c4; }
+:root[data-theme="night"] .prose .alert-warning { --alert: var(--accent-300); }
+:root[data-theme="night"] .prose .alert-caution { --alert: #d9847a; }
+
+/* --- footnotes ----------------------------------------------------------- */
+
+.prose a[data-footnote-ref] {
+  border: 0;
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  padding: 0 0.1em;
+}
+
+.prose section.footnotes {
+  margin-top: var(--space-8);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--divider);
+  font-size: 0.88em;
+  color: var(--muted);
+  text-align: left;
+}
+
+.prose section.footnotes h2 {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 0;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.prose section.footnotes ol { padding-left: var(--space-4); margin: 0; }
+.prose section.footnotes li { margin-bottom: var(--space-1); }
+.prose section.footnotes p { margin: 0; }
+.prose a[data-footnote-backref] { border: 0; margin-left: 0.35em; }
+
+/* --- empty state --------------------------------------------------------- */
 
 .empty {
   position: fixed;
@@ -495,274 +689,75 @@ body.serif .prose h4 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  color: var(--fg-faint);
+  gap: var(--space-2);
+  color: var(--muted);
   user-select: none;
 }
-.empty[hidden] {
-  display: none;
-}
-.empty svg {
-  width: 54px;
-  height: 54px;
-  opacity: 0.45;
-  margin-bottom: 1.1rem;
-}
+.empty[hidden] { display: none; }
+.empty svg { width: 46px; height: 46px; opacity: 0.4; margin-bottom: var(--space-2); }
 .empty-title {
-  font-size: 1.02rem;
+  font-family: var(--font-heading);
+  font-size: 20px;
   font-weight: 600;
-  color: var(--fg-muted);
+  color: var(--strong);
   margin: 0;
 }
-.empty-hint {
-  font-size: 0.88rem;
-  margin: 0.1rem 0 0;
-}
-.empty kbd {
-  font-size: 0.82em;
-  padding: 0.1em 0.36em;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  margin: 0 0.05em;
-}
+.empty-hint { font-size: 12.5px; margin: 0; }
+.empty kbd { margin: 0 0.05em; }
 
-/* --- find bar ------------------------------------------------------------- */
+/* --- find bar ------------------------------------------------------------ */
 
 .findbar {
   position: fixed;
-  top: 0.9rem;
-  right: 1.1rem;
+  top: var(--space-4);
+  right: var(--space-4);
   display: flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.3rem 0.35rem;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(18px) saturate(180%);
-  border: 1px solid var(--rule);
-  border-radius: 9px;
-  box-shadow: var(--shadow);
+  gap: 2px;
+  padding: 5px 6px;
+  background: var(--bg);
+  border: 1px solid var(--divider);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  box-shadow: var(--shadow-md);
   z-index: 10;
 }
-.findbar[hidden] {
-  display: none;
-}
+.findbar[hidden] { display: none; }
 .findbar input {
   appearance: none;
-  width: 15rem;
+  width: 14rem;
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--fg);
-  font-family: var(--sans);
-  font-size: 0.9rem;
-  padding: 0.15rem 0.4rem;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  caret-color: var(--accent);
+  padding: 2px 6px;
 }
-.findbar input::placeholder {
-  color: var(--fg-faint);
-}
-.findbar.nomatch input {
-  color: #c1443b;
-}
+.findbar input::placeholder { color: var(--muted); }
+.findbar.nomatch input { color: #a4342b; }
 .findbar button {
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--fg-muted);
-  font-size: 0.8rem;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
 }
 .findbar button:hover {
-  background: var(--bg-soft);
-  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-text);
 }
 
-/* --- print ---------------------------------------------------------------- */
+/* --- print --------------------------------------------------------------- */
 
 @media print {
-  :root {
-    --bg: #fff;
-    --fg: #111;
-    --bg-code: #f6f6f6;
-    --rule-soft: #e3e3e3;
-  }
-  .findbar,
-  .empty,
-  .copy,
-  .lang {
-    display: none !important;
-  }
-  .prose {
-    max-width: none;
-    padding: 0;
-    opacity: 1;
-  }
-  .prose h1,
-  .prose h2,
-  .prose h3 {
-    break-after: avoid;
-  }
-  .prose figure.code,
-  .prose .table-wrap,
-  .prose img {
-    break-inside: avoid;
-  }
-}
-
-/* --- frontmatter ---------------------------------------------------------- */
-
-.prose .frontmatter {
-  margin: 0 0 2.4em;
-  padding-bottom: 1.25em;
-  border-bottom: 1px solid var(--rule);
-}
-
-.prose .fm-title {
-  font-size: 2.15rem;
-  font-weight: 700;
-  letter-spacing: -0.022em;
-  line-height: 1.2;
-  margin: 0 0 0.5em;
-}
-
-.prose .fm-fields {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.3em 1.1em;
-  margin: 0;
-  font-size: 0.88rem;
-}
-
-.prose .fm-fields dt {
-  font-family: var(--sans);
-  font-size: 0.7rem;
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  padding-top: 0.32em;
-}
-
-.prose .fm-fields dd {
-  margin: 0;
-  color: var(--fg-muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em;
-  align-items: baseline;
-}
-
-.prose .fm-pill {
-  font-size: 0.78rem;
-  line-height: 1.5;
-  padding: 0.05em 0.5em;
-  border: 1px solid var(--rule);
-  border-radius: 20px;
-  background: var(--bg-soft);
-  color: var(--fg-muted);
-}
-
-/* --- GitHub alerts -------------------------------------------------------- */
-
-.prose blockquote.alert {
-  border-left-width: 3px;
-  border-left-color: var(--alert);
-  color: var(--fg);
-  padding-left: 1.1em;
-}
-
-.prose .alert-label {
-  font-family: var(--sans);
-  font-size: 0.72rem;
-  font-weight: 660;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--alert);
-  margin: 0 0 0.3em;
-}
-
-.prose .alert-note {
-  --alert: #3059c9;
-}
-.prose .alert-tip {
-  --alert: #157f4e;
-}
-.prose .alert-important {
-  --alert: #7a4fd0;
-}
-.prose .alert-warning {
-  --alert: #9a6a06;
-}
-.prose .alert-caution {
-  --alert: #c1443b;
-}
-
-@media (prefers-color-scheme: dark) {
-  .prose .alert-note {
-    --alert: #86a8ff;
-  }
-  .prose .alert-tip {
-    --alert: #56cd93;
-  }
-  .prose .alert-important {
-    --alert: #bb95ff;
-  }
-  .prose .alert-warning {
-    --alert: #e0a53a;
-  }
-  .prose .alert-caution {
-    --alert: #ff8f83;
-  }
-}
-
-/* --- footnotes ------------------------------------------------------------ */
-
-/* The plugin ships the section heading as screen-reader-only. A quiet visible
-   label reads better here than a hidden one, so it is restyled, not hidden. */
-.prose section.footnotes h2 {
-  font-family: var(--sans);
-  font-size: 0.72rem;
-  font-weight: 660;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  border: 0;
-  padding: 0;
-  margin: 0 0 0.9em;
-}
-
-/* marked-footnote marks these with data attributes rather than classes. */
-.prose a[data-footnote-ref] {
-  text-decoration: none;
-  font-size: 0.94em;
-  font-variant-numeric: tabular-nums;
-  padding: 0 0.1em;
-}
-
-.prose section.footnotes {
-  margin-top: 3em;
-  padding-top: 1.4em;
-  border-top: 1px solid var(--rule);
-  font-size: 0.92em;
-  color: var(--fg-muted);
-}
-
-.prose section.footnotes ol {
-  padding-left: 1.3em;
-}
-.prose section.footnotes li {
-  margin: 0.4em 0;
-}
-.prose section.footnotes li:target {
-  color: var(--fg);
-}
-.prose section.footnotes p {
-  margin: 0;
-}
-
-.prose a[data-footnote-backref] {
-  text-decoration: none;
-  margin-left: 0.35em;
-  font-size: 0.9em;
+  :root { --bg: #fff; --text: #201f1d; --surface: #f6f4f2; --divider: #d8d5d1; }
+  .findbar, .empty, .copy { display: none !important; }
+  .prose { max-width: none; padding: 0; opacity: 1; }
+  .prose h1, .prose h2, .prose h3 { break-after: avoid; }
+  .prose figure, .prose .table-wrap, .prose img { break-inside: avoid; }
 }

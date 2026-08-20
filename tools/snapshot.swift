@@ -53,6 +53,8 @@ final class Runner: NSObject, WKNavigationDelegate {
             "name": mdURL.lastPathComponent,
             "error": "",
             "showFrontmatter": showFrontmatter,
+            "theme": ProcessInfo.processInfo.environment["MDVIEW_THEME"] ?? "paper",
+            "size": "regular",
         ]
         let json = String(
             data: try! JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!

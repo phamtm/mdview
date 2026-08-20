@@ -31,8 +31,6 @@ import DOMPurify from "dompurify";
   marked.use({ gfm: true, breaks: false, pedantic: false });
   marked.use(markedFootnote());
 
-  if (localStorage.getItem("serif") === "1") document.body.classList.add("serif");
-
   // --- helpers --------------------------------------------------------------
 
   const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -241,9 +239,18 @@ import DOMPurify from "dompurify";
       const source = code.textContent || "";
 
       if (lang === "mermaid") {
+        const figure = document.createElement("figure");
+        figure.className = "diagram";
+        const caption = document.createElement("figcaption");
+        const label = document.createElement("span");
+        label.className = "lang";
+        label.textContent = "mermaid";
+        caption.appendChild(label);
         const holder = document.createElement("div");
         holder.className = "mermaid";
-        pre.replaceWith(holder);
+        figure.appendChild(caption);
+        figure.appendChild(holder);
+        pre.replaceWith(figure);
         diagrams.push({ el: holder, code: source });
         return;
       }
@@ -251,14 +258,16 @@ import DOMPurify from "dompurify";
       const figure = document.createElement("figure");
       figure.className = "code";
       pre.replaceWith(figure);
-      figure.appendChild(pre);
 
-      if (lang) {
-        const tag = document.createElement("span");
-        tag.className = "lang";
-        tag.textContent = lang;
-        figure.appendChild(tag);
-      }
+      // A hairline caption bar carries the language, as the design specifies,
+      // rather than a chip floating over the code.
+      const caption = document.createElement("figcaption");
+      const tag = document.createElement("span");
+      tag.className = "lang";
+      tag.textContent = lang || "text";
+      caption.appendChild(tag);
+      figure.appendChild(caption);
+      figure.appendChild(pre);
 
       const copy = document.createElement("button");
       copy.className = "copy";
@@ -273,7 +282,7 @@ import DOMPurify from "dompurify";
           copy.classList.remove("done");
         }, 1400);
       });
-      figure.appendChild(copy);
+      caption.appendChild(copy);
 
       if (lang && hljs.getLanguage(lang)) {
         try {
@@ -347,29 +356,39 @@ import DOMPurify from "dompurify";
     // like they came from a different app.
     const css = getComputedStyle(document.body);
     const cssVar = (name) => css.getPropertyValue(name).trim();
-    window.mermaid.initialize({
+    const palette = readPalette();
+    const { accent, text, surface, divider } = palette;
+    try {
+      window.mermaid.initialize({
       startOnLoad: false,
       securityLevel: "strict",
       theme: "base",
       fontFamily: css.fontFamily,
+      flowchart: { curve: "basis", padding: 10, nodeSpacing: 34, rankSpacing: 46 },
       themeVariables: {
-        darkMode: isDark(),
-        background: cssVar("--bg"),
-        primaryColor: cssVar("--bg-soft"),
-        primaryTextColor: cssVar("--fg"),
-        primaryBorderColor: cssVar("--rule-strong"),
-        secondaryColor: cssVar("--bg-code"),
-        tertiaryColor: cssVar("--bg-soft"),
-        lineColor: cssVar("--fg-faint"),
-        textColor: cssVar("--fg"),
-        mainBkg: cssVar("--bg-soft"),
-        nodeBorder: cssVar("--rule-strong"),
-        clusterBkg: cssVar("--bg-code"),
-        clusterBorder: cssVar("--rule-soft"),
-        edgeLabelBackground: cssVar("--bg"),
-        fontSize: "14px",
-      },
-    });
+          darkMode: isDark(),
+          background: "transparent",
+          primaryColor: surface,
+          primaryTextColor: text,
+          primaryBorderColor: accent,
+          secondaryColor: surface,
+          tertiaryColor: surface,
+          lineColor: accent,
+          textColor: text,
+          nodeBorder: accent,
+          clusterBorder: divider,
+          edgeLabelBackground: "transparent",
+            fontSize: "13px",
+          },
+      });
+    } catch (error) {
+      // Never fail silently: a bad token used to kill every diagram at once.
+      diagrams.forEach((d) => {
+        d.el.innerHTML = '<div class="error">Mermaid setup: ' +
+          escapeHtml(String((error && error.message) || error)) + "</div>";
+      });
+      return;
+    }
     for (let i = 0; i < diagrams.length; i++) {
       if (token !== renderToken) return;
       const d = diagrams[i];
@@ -377,10 +396,132 @@ import DOMPurify from "dompurify";
         const out = await window.mermaid.render("mmd-" + pass + "-" + i, d.code);
         if (token !== renderToken) return;
         d.el.innerHTML = out.svg;
+        tintDiagram(d.el, palette);
       } catch (e) {
         d.el.innerHTML =
           '<div class="error">Mermaid: ' + escapeHtml(String((e && e.message) || e)) + "</div>";
       }
+    }
+  }
+
+  /**
+   * Resolve the theme tokens to plain opaque rgb() strings for mermaid.
+   *
+   * Two things get in the way. getComputedStyle leaves color-mix() unresolved,
+   * and the Vellum and Colophon themes are built from it; and once resolved,
+   * WebKit reports colours as `color(srgb …)`, which mermaid's colour parser
+   * rejects outright. So each token is painted onto a 1×1 canvas over the page
+   * background and read back as bytes — which also flattens the semi-transparent
+   * tokens into what the reader actually sees.
+   */
+  function readPalette() {
+    const probe = document.createElement("span");
+    probe.style.display = "none";
+    document.body.appendChild(probe);
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const computed = (token) => {
+      probe.style.color = "";
+      probe.style.color = `var(${token})`;
+      return getComputedStyle(probe).color;
+    };
+
+    const flatten = (token, base, fallback) => {
+      const value = computed(token);
+      if (!value || !ctx) return fallback;
+      ctx.clearRect(0, 0, 1, 1);
+      if (base) {
+        ctx.fillStyle = base;
+        ctx.fillRect(0, 0, 1, 1);
+      }
+      ctx.fillStyle = value;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return a === 0 ? fallback : `rgb(${r}, ${g}, ${b})`;
+    };
+
+    const bg = flatten("--bg", "#ffffff", "#f8f4f4");
+    const palette = {
+      bg,
+      accent: flatten("--accent", bg, "#c28d41"),
+      text: flatten("--text", bg, "#2d2b2b"),
+      surface: flatten("--surface", bg, "#eae7e7"),
+      divider: flatten("--divider", bg, "#d7d3d3"),
+    };
+    probe.remove();
+    return palette;
+  }
+
+  /**
+   * Mermaid bakes colours into its SVG. The design wants nodes drawn as stroke
+   * on nothing — no fills — so the output is repainted from the tokens.
+   */
+  function tintDiagram(host, palette) {
+    const svg = host.querySelector("svg");
+    if (!svg) return;
+    svg.removeAttribute("height");
+    svg.style.maxWidth = "100%";
+    svg.style.height = "auto";
+
+    const accent = palette.accent;
+    const text = palette.text;
+
+    host.querySelectorAll(".node rect, .node path, .node polygon, .node circle").forEach((el) => {
+      el.setAttribute("rx", "4");
+      el.setAttribute("ry", "4");
+      el.style.fill = "transparent";
+      el.style.stroke = accent;
+      el.style.strokeWidth = "1px";
+    });
+    host
+      .querySelectorAll(".nodeLabel, .nodeLabel *, .node foreignObject div, .node text, .node tspan")
+      .forEach((el) => {
+        el.style.color = text;
+        el.style.fill = text;
+        el.style.background = "transparent";
+      });
+    host.querySelectorAll(".edgePath path, .flowchart-link, .edgePaths path").forEach((el) => {
+      el.style.stroke = accent;
+      el.style.fill = "none";
+    });
+    host.querySelectorAll("marker path, marker polygon, .arrowheadPath").forEach((el) => {
+      el.style.fill = accent;
+      el.style.stroke = accent;
+    });
+    host.querySelectorAll(".edgeLabel, .edgeLabel *").forEach((el) => {
+      el.style.background = "transparent";
+      el.style.backgroundColor = "transparent";
+      el.style.color = text;
+      el.style.fill = text;
+      el.style.fontStyle = "italic";
+      el.style.fontSize = "11.5px";
+    });
+  }
+
+  // --- appearance -----------------------------------------------------------
+
+  const THEMES = ["paper", "vellum", "night"];
+  const SIZES = ["small", "regular", "large"];
+
+  /** Paper, Vellum or Colophon. Anything else follows the OS appearance. */
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    if (THEMES.includes(theme)) {
+      root.dataset.theme = theme;
+    } else {
+      delete root.dataset.theme;
+    }
+  }
+
+  function applySize(size) {
+    const root = document.documentElement;
+    if (SIZES.includes(size) && size !== "regular") {
+      root.dataset.size = size;
+    } else {
+      delete root.dataset.size;
     }
   }
 
@@ -405,6 +546,9 @@ import DOMPurify from "dompurify";
       elDoc.classList.add("ready");
       return;
     }
+
+    applyTheme(payload.theme);
+    applySize(payload.size);
 
     const split = splitFrontmatter(payload.markdown || "");
     const dirty = marked.parse(split.body);
@@ -490,9 +634,6 @@ import DOMPurify from "dompurify";
     refreshDiagrams() {
       if (diagrams.length) drawDiagrams(renderToken);
     },
-    toggleFont() {
-      const on = document.body.classList.toggle("serif");
-      localStorage.setItem("serif", on ? "1" : "0");
-    },
+
   };
 })();

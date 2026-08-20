@@ -45,9 +45,17 @@ swiftc -O -o build/snapshot-window $SRC build/window-tool/main.swift
 ./build/snapshot-window build/window-dark.png dark
 
 echo "==> renderer"
+# Every theme, not just the default: the Vellum and Colophon palettes are built
+# from color-mix(), and a token that resolves to a syntax mermaid cannot parse
+# breaks diagrams in that theme alone.
 swift tools/snapshot.swift Resources sample.md build/shot light >build/diag-light.txt
 swift tools/snapshot.swift Resources sample.md build/shot dark  >build/diag-dark.txt
-python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt
+MDVIEW_THEME=night swift tools/snapshot.swift Resources sample.md build/shot-night dark \
+  >build/diag-night.txt
+MDVIEW_THEME=vellum swift tools/snapshot.swift Resources sample.md build/shot-vellum light \
+  >build/diag-vellum.txt
+python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
+  build/diag-night.txt build/diag-vellum.txt
 
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
 swift tools/snapshot.swift Resources sample.md build/nofm light nofm >build/diag-nofm.txt

@@ -11,7 +11,6 @@ extension Notification.Name {
     static let mdvFind = Notification.Name("mdv.find")
     static let mdvPrint = Notification.Name("mdv.print")
     static let mdvCopyPath = Notification.Name("mdv.copyPath")
-    static let mdvToggleFont = Notification.Name("mdv.toggleFont")
     static let mdvSettingsChanged = Notification.Name("mdv.settingsChanged")
     static let mdvToggleSidebar = Notification.Name("mdv.toggleSidebar")
     static let mdvReloadPage = Notification.Name("mdv.reloadPage")
@@ -223,7 +222,6 @@ struct ViewerWebView: NSViewRepresentable {
                 (.mdvFind, { [weak self] in self?.run("window.mdview.openFind()") }),
                 (.mdvPrint, { [weak self] in self?.printPage() }),
                 (.mdvCopyPath, { [weak self] in self?.copyPath() }),
-                (.mdvToggleFont, { [weak self] in self?.run("window.mdview.toggleFont()") }),
                 (.mdvReloadPage, { [weak self] in self?.webView?.reloadFromOrigin() }),
                 (.mdvSettingsChanged, { [weak self] in self?.rerender() }),
             ]

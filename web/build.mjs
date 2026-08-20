@@ -9,7 +9,6 @@
 // IIFE, not ESM: the page is loaded from file://, where module scripts are
 // blocked by CORS. Plain scripts work, and the CSP allows script-src 'self'.
 import * as esbuild from "esbuild";
-import { copyFile, mkdir } from "node:fs/promises";
 import { statSync } from "node:fs";
 
 const out = "../Resources";
@@ -40,21 +39,12 @@ const builds = [
   },
 ];
 
-/** highlight.js ships its themes as plain CSS; the page links them directly. */
-async function copyThemes() {
-  await mkdir(out, { recursive: true });
-  await copyFile("node_modules/highlight.js/styles/github.min.css", `${out}/hljs-light.css`);
-  await copyFile("node_modules/highlight.js/styles/github-dark.min.css", `${out}/hljs-dark.css`);
-}
-
 function report() {
-  for (const file of ["bundle.js", "mermaid.js", "hljs-light.css", "hljs-dark.css"]) {
+  for (const file of ["bundle.js", "mermaid.js"]) {
     const kb = (statSync(`${out}/${file}`).size / 1024).toFixed(0);
     console.log(`  ${file.padEnd(16)} ${kb.padStart(5)} KB`);
   }
 }
-
-await copyThemes();
 
 if (watch) {
   for (const options of builds) {
