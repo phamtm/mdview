@@ -21,7 +21,10 @@ struct ViewerView: View {
     // by a hairline at the sidebar's edge. The traffic lights (14pt, x=9…69 on
     // macOS 26) sit in the left half of that band.
     static let trafficLightSpan: CGFloat = 69
-    static let titlebarHeight: CGFloat = 48
+    /// 52 so the traffic lights land in its centre: with an empty unified
+    /// toolbar attached, macOS centres them 26pt from the top. Measured, not
+    /// guessed — see DESIGN.md.
+    static let titlebarHeight: CGFloat = 52
     static let sidebarDefaultWidth = Double(SidebarView.width)
 
     var body: some View {
@@ -300,6 +303,14 @@ final class WindowStyler {
     func apply(_ window: NSWindow?) {
         let targets = window.map { [$0] } ?? NSApp.windows
         for target in targets where target.styleMask.contains(.titled) {
+            // An empty unified toolbar is what moves the traffic lights down to
+            // the centre of a taller band. Nothing is ever put in it.
+            if target.toolbar == nil {
+                let toolbar = NSToolbar(identifier: "mdview.titlebar")
+                toolbar.showsBaselineSeparator = false
+                target.toolbar = toolbar
+            }
+            if target.toolbarStyle != .unified { target.toolbarStyle = .unified }
             if !target.styleMask.contains(.fullSizeContentView) {
                 target.styleMask.insert(.fullSizeContentView)
             }
@@ -318,7 +329,14 @@ final class WindowStyler {
         }
         let content = window.contentView?.frame ?? .zero
         let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "none"
+        var buttonCentre = -1.0
+        if let button = window.standardWindowButton(.closeButton),
+            let frame = button.superview?.convert(button.frame, to: nil)
+        {
+            buttonCentre = window.frame.height - frame.maxY + frame.height / 2
+        }
         return [
+            "buttonCentre=\(Int(buttonCentre.rounded()))",
             "firstResponder=\(responder)",
             "titleVisibility=\(window.titleVisibility == .hidden ? "hidden" : "visible")",
             "fullSizeContentView=\(window.styleMask.contains(.fullSizeContentView))",

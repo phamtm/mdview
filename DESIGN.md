@@ -46,16 +46,29 @@ System" picks Paper or Colophon by appearance.
 
 | Zone | Value |
 | --- | --- |
-| Titlebar band | 48pt, surface-coloured, hairline beneath |
+| Titlebar band | 52pt, surface-coloured, hairline beneath |
 | Band split | hairline at the sidebar's edge; traffic lights and the sidebar toggle sit left of it |
 | Sidebar | 258pt default (drag 170–460), surface 62% over bg, hairline right edge |
 | Sidebar row | 27pt, 16pt indent per level, 4pt radius |
 | Document column | 700pt measure at 17px (640/15 small, 760/19 large) |
 | Column padding | 72pt top, 36.8pt sides, 120pt bottom |
 
-Traffic lights measured on macOS 26: 14pt, spanning x=9…69, centre 16pt from the
-top of the window. The band is tall enough to hold them with room around, rather
-than crowding them with adjacent chrome.
+**The traffic lights' vertical position is not ours to set** — macOS derives it
+from the titlebar setup. Measured on macOS 26:
+
+| Titlebar setup | Button centre | Titlebar height |
+| --- | --: | --: |
+| Hidden titlebar | 16 | 32 |
+| + empty toolbar, `.unified` | 26 | 66 |
+| `.unifiedCompact` | 20 | 40 |
+| `.expanded` | 16 | 48 |
+
+So the band is **52pt** and an empty unified toolbar is attached to the window:
+that puts the buttons at 26, exactly half the band, and they sit centred. Nothing
+is ever placed in that toolbar. Change the band height and the buttons stop being
+centred — `tools/check-window-chrome.sh` asserts `buttonCentre=26` to catch it.
+
+Horizontally they span x=9…69, which is what the left zone reserves.
 
 ## How the two halves stay in step
 
