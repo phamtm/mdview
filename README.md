@@ -53,8 +53,9 @@ npm run watch             # rebuild on save, then ⌥⌘R in the app
 | | |
 | --- | --- |
 | `web/src/viewer.js` | The renderer: markdown → DOM, post-processing, find bar |
+| `web/src/rail.js` | The tick rail beside the column, and it posts the outline to the app |
 | `web/src/mermaid.js` | Diagram entry point, built as its own file |
-| `web/build.mjs` | esbuild config, and copies highlight.js themes |
+| `web/build.mjs` | esbuild config for the two bundles |
 | `Resources/bundle.js` | **Generated.** Don't edit |
 | `Resources/mermaid.js` | **Generated.** Injected on demand, never loaded otherwise |
 
@@ -81,13 +82,14 @@ Not supported: LaTeX/math, `:emoji:` shortcodes.
 
 ### Frontmatter
 
-A leading `---` (YAML) or `+++` (TOML) block is parsed out and shown as a header
-above the document — title in full size, everything else as labelled fields, with
-list values as pills. If the body already opens with an `# H1` matching the
+A leading `---` (YAML) or `+++` (TOML) block is parsed out and split in two, so no
+field is shown twice: `title` and `subtitle` head the document, and every other
+field lives in the disclosure behind the document's name in the titlebar (`⌘I`),
+with list values as pills. If the body already opens with an `# H1` matching the
 frontmatter title, the title isn't printed twice.
 
-`View ▸ Show Frontmatter` turns the header off; the block never renders as raw
-text either way.
+`View ▸ Show Frontmatter` turns the document's head off; the disclosure keeps its
+fields, and the block never renders as raw text either way.
 
 The parser handles what frontmatter almost always is: `key: value` scalars,
 inline `[a, b]` lists, `- item` block lists, quoted strings and `#` comments.
@@ -117,6 +119,12 @@ Add as many as you like; they come back next launch.
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
 - Relative image paths resolve against the file's own folder
+- Ticks down the left of the column show where you are; hover one to see its
+  heading, click to jump there
+- `⌥⌘O` opens a contents panel on the right listing the document's headings —
+  `#`, `##` and `###`; deeper ones are left out. Drag its left edge to resize —
+  like the sidebar, the width sticks, and neither panel is allowed to squeeze the
+  document below its minimum width
 
 To make `.md` files open here by default: select one in Finder, `⌘I`, and pick
 MDView under "Open with", then "Change All".
@@ -128,30 +136,35 @@ MDView under "Open with", then "Change All".
 | `⌘O` | Open file |
 | `⇧⌘O` | Add folder to sidebar |
 | `⌘B` | Toggle sidebar |
+| `⌥⌘O` | Toggle the contents panel |
+| `⌘,` | Settings: theme, type size, alignment, column width |
 | `⌘R` | Reload document |
 | `⌥⌘R` | Reload renderer (after a `web/` rebuild) |
 | `⌘F` | Find in document |
+| `⌘I` | Front matter of the open file |
+| `⌥⌘C` | Copy the document's markdown source |
 | `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
-| `⌥⌘S` | Toggle serif reading font |
 | `View ▸ Show Frontmatter` | Show or hide the metadata header |
+| `File ▸ Copy File Path` | Path of the open file |
 | `⇧⌘R` | Reveal in Finder |
 | `⌘P` | Print |
 
 ## Design
 
 Spacing, type and colour follow [DESIGN.md](DESIGN.md) — the layout zones, the
-density of the sidebar, and the rule that colour belongs to content and not to
-chrome. Change that document first, then follow it into `ViewerLayout.swift`,
-`SidebarView.swift` and `style.css`.
+density of the sidebar, the three themes, and the rule that the gold accent is
+stroke and rule, never fill. Change that document first, then follow it into
+`ViewerLayout.swift`, `SidebarView.swift`, `Controls.swift` and `style.css`.
 
 ## The window
 
-There are no dividers anywhere. The sidebar sits flush against the document on a
-background a hair off it, runs the full height of the window behind the traffic
-lights, and the filename lives in a slim borderless header rather than the
-titlebar.
+The real titlebar is hidden. In its place a 52pt band runs across the top of the
+window, carrying the traffic lights and the sidebar toggle on the left, the
+document's name and word count in the middle, and the copy, contents and settings
+buttons on the right. Panels are separated by hairlines of our own rather than
+system dividers.
 
-Two consequences worth knowing:
+Consequences worth knowing:
 
 - **`NavigationSplitView` isn't used.** It always draws a divider between its
   columns and offers no way to turn that off, so the split is a plain `HStack`
@@ -160,14 +173,16 @@ Two consequences worth knowing:
   Setting `titlebarAppearsTransparent` and `titleVisibility` on the `NSWindow` by
   hand does *not* hold: SwiftUI configures its own titlebar after the scene is
   attached and puts the title text back, giving you the filename twice — once in
-  the titlebar, once in the header — plus an empty band above the document. Use
+  the titlebar, once in our band — plus an empty band above the document. Use
   the scene modifier. `tools/check-window-chrome.sh` guards against a regression by
   asking the running app what its window actually looks like.
-- The traffic lights sit over app content. Measured on macOS 26 they are 14pt,
-  spanning x=9…69 with their centre 16pt from the top of the window — so the
-  document header is 32pt tall to share that centre line, the sidebar keeps 36pt
-  clear, and the header shifts right when the sidebar is hidden. Those numbers are
-  constants in `ViewerLayout.swift`; re-measure rather than nudge them by eye.
+- The traffic lights sit over app content, and macOS decides where: it derives
+  their position from the titlebar setup. With an empty unified toolbar attached
+  they are 14pt, span x=9…69 and sit 26pt from the top — so the band is 52pt to
+  put them in its centre, and the band's left zone reserves their span plus room
+  for the toggle. Those numbers are constants in `ViewerLayout.swift` and
+  `tools/check-window-chrome.sh` asserts `buttonCentre=26`; DESIGN.md has the
+  measurements they came from. Re-measure rather than nudge them by eye.
 - **No focus rings, and focus starts in the document.** `.focusEffectDisabled()` on
   the layout root covers every control, and the web view is made first responder on
   creation — otherwise SwiftUI focuses the header button at launch and rings it,
@@ -199,9 +214,12 @@ rebuild, `killall Dock` forces it to re-read.
 | `Sources/FileWatcher.swift` | Watches the file for changes, including the temp-file-plus-rename that editors use when saving |
 | `Sources/ViewerWebView.swift` | Hosts the WebKit view, routes menu commands and link clicks, accepts dropped files |
 | | The navigation policy is load-bearing: WebKit reports in-page `#fragment` jumps as link activations on `viewer.html`, so they must be allowed, while everything else must be cancelled — navigating away destroys `window.mdview` and every later render fails silently |
+| `Sources/Notifications.swift` | The one list of `mdv.*` channels: most are handled by the web view, the panel toggles by `ViewerLayout` |
 | `Sources/MDViewApp.swift` | App entry point, menu bar, launch behaviour |
-| `Sources/ViewerLayout.swift` | The window: the divider-less split, the document header, the titlebar treatment |
-| `Resources/viewer.html` + `app.js` + `style.css` | The page itself: markdown to DOM, then styling |
+| `Sources/ViewerLayout.swift` | The window: the hand-built split, the titlebar band, the panel resize handles |
+| `Sources/WindowChrome.swift` | The AppKit side of the window: hidden titlebar, transparency, background — and the dump `tools/check-window-chrome.sh` reads |
+| `Sources/Controls.swift` | The small chrome controls the design allows: the icon button, the copy button, and the outline and ghost button styles |
+| `Resources/viewer.html` + `bundle.js` + `style.css` | The page itself: markdown to DOM, then styling (`mermaid.js` joins them on demand) |
 | `web/` | npm project for the page: marked + marked-footnote (markdown), highlight.js (code), Mermaid (diagrams), DOMPurify (sanitising) |
 
 Three things worth knowing if you change it:
@@ -236,22 +254,54 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-Checks four things:
+Ten checks, in the order they run:
 
-- the JS parses
-- the file watcher survives the temp-file-plus-rename that editors do on save
-- the sidebar tree sorts folders first, filters non-markdown files, expands down
+- **web bundle** — esbuild is the syntax check, since it fails the build on a
+  parse error, and it means everything below runs against the current `web/src`
+- **payload contract** — every `payload.*` key the page reads is declared in
+  `RenderPayload.swift`, and the harness goes through that type rather than
+  hand-rolling a dictionary. The two sides drifted once and the tests missed it
+- **file watcher** — survives the temp-file-plus-rename that editors do on save
+- **sidebar tree** — sorts folders first, filters non-markdown files, expands down
   to a revealed file, and notices files appearing and disappearing on disk
-- the frontmatter parser handles YAML and TOML delimiters, both list styles,
-  quotes, comments, CRLF endings, nested-map skipping, and the cases that must
-  *not* be treated as frontmatter (a `---` rule on the first line)
-- a headless WebKit render of `sample.md` produces the expected headings, code
-  blocks, tables, task lists, diagram, resolved image path, frontmatter header,
-  five alert kinds and footnotes — and strips the `<script>` planted in that file
-- with the frontmatter header switched off, the YAML doesn't leak into the body
+- **window chrome** — launches the built app and asks what its window actually
+  looks like: titlebar hidden and transparent, content filling the frame, traffic
+  lights centred in the band, focus in the web view
+- **theme reaches the document** — the real app in each of the three fixed themes,
+  checking the page rendered the one that was asked for, that the window's own
+  appearance follows the theme rather than the OS (native scrollbars take their
+  knob colour from it, so a light theme under a dark macOS drew a white knob),
+  and that the window frame and the overscroll area are painted to match
+- **window layout** — the whole window rendered offscreen to
+  `build/window-{light,dark}.png`
+- **renderer** — a headless render of `sample.md` produces the expected headings,
+  code blocks, tables, task lists, diagram, resolved image path, five alert kinds
+  and footnotes, and strips the `<script>` planted in that file. Run in every
+  theme, because a token that Mermaid's colour parser rejects breaks diagrams in
+  that theme alone — plus one run with the System theme on a *dark* appearance,
+  the only combination where the theme and the appearance disagree, which is
+  where the alert colours went wrong. Also asserts the column's 68px left
+  padding, and that the word count the page reports leaves the frontmatter out.
+  Two unit suites run inside the page here too. The frontmatter parser:
+  YAML and TOML delimiters, both list styles, quotes, comments, CRLF endings,
+  nested-map skipping, and the cases that must *not* be treated as frontmatter.
+  And the word count's separators — space and the newlines, but deliberately not
+  a tab or a non-breaking space, which is how Swift counted before the page took
+  it over and is not something `sample.md` can show.
+  Finally it renders a **second** document, in a different theme, into the same
+  page: the new theme has to apply, the headings have to be the new document's,
+  and the rail and the posted outline have to be *replaced* rather than added
+  to. That is the page-side half of "the first render works and every later one
+  silently does nothing", which is invisible in a single shot. The app's
+  navigation policy is *not* covered — the harness runs its own navigation
+  delegate
+- **contents rail** — the hover preview appears, and sits beside the tick it
+  describes rather than at the top of the window
+- **frontmatter hidden** — with the header switched off, nothing from the block
+  reaches the document, the YAML doesn't leak into the body, and the body keeps
+  its headings
 
-It also renders the whole window offscreen to `build/window-{light,dark}.png`.
-Two things make that harness fiddly, both worked around:
+Two things make the window snapshot fiddly, both worked around:
 
 - WebKit draws out of process, so `cacheDisplay()` captures the chrome with an
   empty document area. The web view is snapshotted separately and composited in.
@@ -260,5 +310,6 @@ Two things make that harness fiddly, both worked around:
   stand-in traffic lights, and the real titlebar is verified by state instead —
   which is exactly the gap that let the duplicate-title bug through.
 
-It also writes `build/shot-{light,dark}.png` and `build/sidebar-{light,dark}.png`
-so you can eyeball the styling without launching anything.
+It also writes `build/shot-{light,dark}.png`, plus one per remaining run
+(`shot-night-dark.png`, `shot-vellum-light.png`, `shot-system-dark.png`), so you
+can eyeball the styling without launching anything.

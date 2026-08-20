@@ -39,8 +39,8 @@ the lighter it sets.
 | Radius | 2 · 4 · 7 |
 
 Three themes resolved from those ramps: **Paper** (near-white), **Vellum** (warm,
-accent-tinted), **Colophon** (near-black). Chosen from `View ▸ Theme`; "Follow
-System" picks Paper or Colophon by appearance.
+accent-tinted), **Colophon** (near-black). Chosen in the settings panel (`⌘,`);
+"Follow System" picks Paper or Colophon by appearance.
 
 ### Sizing display type against body type
 
@@ -65,8 +65,8 @@ instead and need no correction — those still use `Typeface.display` directly.
 | Sidebar | 258pt default (drag 170–460), surface 62% over bg, hairline right edge |
 | Sidebar row | 27pt, 16pt indent per level, 4pt radius |
 | Contents panel | 244pt default (drag 160–460), same surface, hairline left edge |
-| Document column | 700pt measure at 17px (640/15 small, 760/19 large) |
-| Column padding | 72pt top, 36.8pt sides, 120pt bottom |
+| Document column | 700pt measure, body 17px (15 small, 19 large) |
+| Column padding | 72pt top, 68pt left, 36.8pt right, 120pt bottom — the left side is wider so the text clears the tick rail |
 
 **The traffic lights' vertical position is not ours to set** — macOS derives it
 from the titlebar setup. Measured on macOS 26:
@@ -94,7 +94,7 @@ The palette exists **twice**: `Resources/style.css` for the document, and
 two short readable tables beat a build step that syncs them, for an app this size —
 but it means **a colour changed in one must be changed in the other.**
 
-Three implementation notes that are easy to trip over:
+Implementation notes that are easy to trip over:
 
 - **Three surfaces need the theme colour, not one.** The stylesheet paints the
   page, but AppKit paints the window frame and WebKit paints the area behind the
@@ -129,8 +129,26 @@ Three implementation notes that are easy to trip over:
   `code` alone does nothing — `code` is inline inside `pre`, so the pre's strut
   sets the line box. `web/src/viewer.js` tags such blocks `.ascii` by testing for
   U+2500–257F, and the render check asserts the leading matches the font size.
+- **A rule written for `[data-theme="night"]` needs a `:root:not([data-theme])`
+  twin inside the `prefers-color-scheme: dark` block.** Colophon and the System
+  theme on a dark Mac are two different selectors reaching the same palette, so a
+  dark-only override written once only lands on one of them — the other keeps the
+  light value on a near-black ground. Two rule families need the twin: code text
+  (`figure.code code`) and the four coloured alerts. The alerts were missing
+  theirs, and `.alert-label` is 10px text in that colour, so it measured 2.2:1
+  where Colophon gets 5.7:1. The guard matters as much as the rule: without
+  `:not([data-theme])` it would leak into Paper and Vellum, and only *look*
+  right because the window's appearance is pinned on the Swift side.
+- **The render harness picks the webview's appearance from its own `light|dark`
+  argument, not from `MDVIEW_THEME`.** So the default runs only ever exercise
+  theme and appearance *agreeing* — which is exactly why the alert bug was
+  invisible for as long as it was. `tools/run-tests.sh` adds a
+  `MDVIEW_THEME=system … dark` run for the disagreeing case, and
+  `tools/check-render.py` asserts its alert accents match Colophon's.
 - **Test every theme.** The bug above passed a suite that only rendered the
-  default one. `tools/run-tests.sh` now renders all three.
+  default one. `tools/run-tests.sh` now makes five renders across all four
+  settings choices: Paper on a light Mac and on a dark one, Colophon, Vellum,
+  and the Follow System run above.
 
 ## The titlebar's right side
 
@@ -179,6 +197,8 @@ list — the row actually opened wins — rather than each row deciding for itse
 | Chrome palette, theme resolution, typeface registration | `Sources/Theme.swift` |
 | Titlebar band, zones, the divider-less split | `Sources/ViewerLayout.swift` |
 | Sidebar density, rows, search, badges, footer | `Sources/SidebarView.swift` |
+| Icon button, outline and ghost button treatments | `Sources/Controls.swift` |
+| Hidden titlebar, window transparency and background | `Sources/WindowChrome.swift` |
 | Document type, colour, code, diagrams, callouts | `Resources/style.css` |
 | Document post-processing and diagram tinting | `web/src/viewer.js` |
 
@@ -201,16 +221,21 @@ Split deliberately, so nothing appears twice:
   other field — rows with hairlines, list values as outlined pills.
 
 The page parses the block and posts the fields to Swift. Swift does not parse
-frontmatter at all: a second parser is a second thing to keep in step.
+frontmatter at all: a second parser is a second thing to keep in step. The
+titlebar's **word count** rides the same message for that reason — Swift counted
+the raw file for a while, frontmatter included, and the only way to fix that in
+Swift was the second parser.
 
 ## The outline: a rail and a panel
 
 Two pieces, with different jobs:
 
 - **The tick rail** (`web/src/rail.js`) is a passive indicator down the left of the
-  column: ticks sized by heading level, swelling under the pointer, naming their
-  section on hover, jumping on click. It costs no horizontal space and shows where
-  you are at a glance.
+  column: ticks sized by heading level (26/17/11pt), each swelling under the
+  pointer with a gaussian falloff so the column reads as one object responding
+  rather than a row of separate marks. Hovering names the section in a card, with
+  the text that follows the heading; clicking jumps. It costs no horizontal space
+  and shows where you are at a glance.
 - **The contents panel** (`Sources/OutlinePanel.swift`) is the navigable list, on
   the **right**, toggled from the titlebar or `⌥⌘O`. Left answers "where am I in my
   files"; right answers "where am I in this document".
@@ -242,43 +267,5 @@ Two things to know if you touch it:
 - **Do not defer the outline read to `requestAnimationFrame`.** WebKit throttles
   animation frames when the window is offscreen, so the rail never initialises in
   the snapshot harness. `getBoundingClientRect` forces layout anyway.
-- **The outline is re-read after diagrams draw.** Mermaid changes the height of
-  the page, which invalidates every offset below it.
-
-## Frontmatter, and where it is shown
-
-Split deliberately, so nothing appears twice:
-
-- **The document** carries `title` as its display head and `subtitle` as an italic
-  line beneath it.
-- **The titlebar disclosure** (`⌘I`, or click the document's name) carries every
-  other field — rows with hairlines, list values as outlined pills.
-
-The page parses the block and posts the fields to Swift. Swift does not parse
-frontmatter at all: a second parser is a second thing to keep in step.
-
-## The contents rail
-
-Lives in the page (`web/src/rail.js`), because it needs live heading offsets and
-scroll position. Three states:
-
-- **collapsed** — ticks only, sized by heading level (26/17/11pt), each swelling
-  under the pointer with a gaussian falloff so the column reads as one object
-  responding rather than a row of separate marks
-- **hovered** — the tick under the pointer names its section in a card, with the
-  first sentence that follows the heading
-- **expanded** — after dwelling 3s in the 58pt zone, the contents panel; the pin
-  keeps it open and the column shifts right to 312pt to make room
-
-Two things to know if you touch it:
-
-- **Do not defer the outline read to `requestAnimationFrame`.** WebKit throttles
-  animation frames when the window is offscreen, so the rail never initialises in
-  the snapshot harness. `getBoundingClientRect` forces layout anyway, so reading
-  synchronously is both simpler and testable.
-- **Pinning widens the measure by exactly the extra padding.** `box-sizing` is
-  `border-box`, so `padding-left: 312px` alone takes 244px out of the text column
-  rather than moving it right. In a window too narrow to fit the wider measure the
-  column does still shrink — there is nowhere else for it to go.
 - **The outline is re-read after diagrams draw.** Mermaid changes the height of
   the page, which invalidates every offset below it.
