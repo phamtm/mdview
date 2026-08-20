@@ -57,7 +57,10 @@ final class Runner: NSObject, WKNavigationDelegate {
             error: "",
             showFrontmatter: showFrontmatter,
             theme: ProcessInfo.processInfo.environment["MDVIEW_THEME"] ?? "paper",
-            size: "regular"
+            size: "regular",
+            alignment: ProcessInfo.processInfo.environment["MDVIEW_ALIGN"] ?? "justify",
+            measure: Double(ProcessInfo.processInfo.environment["MDVIEW_MEASURE"] ?? "")
+                ?? RenderPayload.defaultMeasure
         )
         guard let call = payload.renderCall else { print("payload encode failed"); return }
         webView.evaluateJavaScript(call + " 'ok'") { _, error in
@@ -96,6 +99,9 @@ final class Runner: NSObject, WKNavigationDelegate {
               railHidden: !!document.querySelector('.rail-zone').hidden,
               asciiBlocks: document.querySelectorAll('#doc figure.code.ascii').length,
               railPinned: document.body.classList.contains('rail-pinned'),
+              appliedAlign: getComputedStyle(document.querySelector('#doc')).textAlign,
+              appliedMeasure: getComputedStyle(document.documentElement)
+                .getPropertyValue('--measure').trim(),
               proseTextWidth: (function () {
                 var doc = document.getElementById('doc');
                 var style = getComputedStyle(doc);

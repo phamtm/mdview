@@ -146,7 +146,9 @@ struct ViewerWebView: NSViewRepresentable {
                 error: doc.loadError ?? "",
                 showFrontmatter: settings.showFrontmatter,
                 theme: settings.theme,
-                size: settings.size
+                size: settings.size,
+                alignment: settings.alignment,
+                measure: settings.measure
             )
             guard let call = payload.renderCall else { return }
             webView.evaluateJavaScript(call)

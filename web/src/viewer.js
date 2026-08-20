@@ -535,6 +535,20 @@ import { createRail } from "./rail.js";
     }
   }
 
+  /** Justified with hyphenation, or ragged-right without it. */
+  function applyAlignment(alignment) {
+    document.documentElement.dataset.align = alignment === "left" ? "left" : "justify";
+  }
+
+  /** The width of the text column, in points. */
+  function applyMeasure(measure) {
+    const width = Number(measure);
+    document.documentElement.style.setProperty(
+      "--measure",
+      `${Number.isFinite(width) && width > 0 ? width : 700}px`
+    );
+  }
+
   // --- render --------------------------------------------------------------
 
   function render(payload) {
@@ -559,6 +573,8 @@ import { createRail } from "./rail.js";
 
     applyTheme(payload.theme);
     applySize(payload.size);
+    applyAlignment(payload.alignment);
+    applyMeasure(payload.measure);
 
     const split = splitFrontmatter(payload.markdown || "");
     const dirty = marked.parse(split.body);

@@ -12,6 +12,8 @@ struct ViewerView: View {
     @State private var widthAtDragStart: CGFloat?
     @AppStorage("theme") private var themeName = AppTheme.system.rawValue
     @AppStorage("size") private var sizeName = "regular"
+    @AppStorage("alignment") private var alignmentName = "justify"
+    @AppStorage("measure") private var measureWidth = RenderPayload.defaultMeasure
     @State private var showSettings = false
     @State private var showFrontmatter = false
     @Environment(\.colorScheme) private var colorScheme
@@ -84,6 +86,8 @@ struct ViewerView: View {
                 SettingsSheet(
                     theme: $themeName,
                     size: $sizeName,
+                    alignment: $alignmentName,
+                    measure: $measureWidth,
                     effectiveTheme: colorScheme == .dark
                         ? AppTheme.night.rawValue : AppTheme.paper.rawValue,
                     palette: palette,

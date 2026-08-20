@@ -66,6 +66,14 @@ for path in sys.argv[1:]:
         print(f"  FAIL {path}: theme not applied — asked {expected_theme}, "
               f"page has {data.get('appliedTheme')!r}")
         failed = True
+    # Layout settings have to reach the page, not just the chrome.
+    if data.get("appliedAlign") != "justify":
+        print(f"  FAIL {path}: alignment did not apply ({data.get('appliedAlign')!r})")
+        failed = True
+    if data.get("appliedMeasure") != "700px":
+        print(f"  FAIL {path}: measure did not apply ({data.get('appliedMeasure')!r})")
+        failed = True
+
     # Box-drawing connects only when the line box equals the glyph height.
     leading = str(data.get("asciiLeading", ""))
     if " / " in leading:

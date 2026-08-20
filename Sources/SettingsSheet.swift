@@ -6,6 +6,8 @@ import SwiftUI
 struct SettingsSheet: View {
     @Binding var theme: String
     @Binding var size: String
+    @Binding var alignment: String
+    @Binding var measure: Double
     /// Which theme is actually in effect, so "Follow System" still shows a
     /// selected swatch rather than none at all.
     let effectiveTheme: String
@@ -54,6 +56,11 @@ struct SettingsSheet: View {
                 .padding(.bottom, Self.space3)
             themeSwatches
                 .padding(.bottom, Self.space6)
+            sectionLabel("Layout")
+                .padding(.bottom, Self.space3)
+            alignmentChoice
+            columnWidth
+                .padding(.top, Self.space3)
             typeSize
         }
         .padding(.horizontal, Self.space6)
@@ -151,39 +158,95 @@ struct SettingsSheet: View {
         .frame(height: height)
     }
 
+    /// Justified reads as a set page; ragged-right is easier on a narrow column.
+    private var alignmentChoice: some View {
+        HStack(spacing: Self.space4) {
+            Text("Alignment")
+                .font(Typeface.display(14))
+                .foregroundStyle(palette.text)
+            Spacer(minLength: 0)
+            segmented(
+                options: [("justify", "Justified"), ("left", "Left")],
+                selection: alignment
+            ) { choice in
+                alignment = choice
+                settingsChanged()
+            }
+        }
+    }
+
+    /// The measure, in points. Continuous, because the comfortable width depends
+    /// on the type size and the window.
+    private var columnWidth: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: Self.space4) {
+                Text("Column width")
+                    .font(Typeface.display(14))
+                    .foregroundStyle(palette.text)
+                Spacer(minLength: 0)
+                Text("\(Int(measure)) pt")
+                    .font(Typeface.text(11))
+                    .monospacedDigit()
+                    .foregroundStyle(palette.muted)
+            }
+            Slider(
+                value: Binding(
+                    get: { measure },
+                    set: {
+                        measure = $0.rounded(); settingsChanged()
+                    }
+                ),
+                in: 480...1000,
+                step: 20
+            )
+            .controlSize(.small)
+            .tint(palette.accent)
+        }
+    }
+
+    /// The design's segmented control: outlined, hairline-divided, gold tint on
+    /// the chosen option.
+    private func segmented(
+        options: [(id: String, name: String)], selection: String, choose: @escaping (String) -> Void
+    ) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
+                let selected = selection == option.id
+                Text(option.name)
+                    .font(Typeface.display(12.5))
+                    .foregroundStyle(selected ? palette.text : palette.muted)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(palette.accent.opacity(selected ? 0.16 : 0))
+                    .overlay(alignment: .leading) {
+                        if index > 0 {
+                            Rectangle().fill(palette.divider).frame(width: 1)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { choose(option.id) }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(palette.divider, lineWidth: 1)
+        )
+    }
+
     private var typeSize: some View {
         HStack(spacing: Self.space4) {
             Text("Type size")
                 .font(Typeface.display(14))
                 .foregroundStyle(palette.text)
             Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                ForEach(Array(SettingsSheet.sizes.enumerated()), id: \.element.id) {
-                    index, option in
-                    let selected = size == option.id
-                    Text(option.name)
-                        .font(Typeface.display(12.5))
-                        .foregroundStyle(selected ? palette.text : palette.muted)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(palette.accent.opacity(selected ? 0.16 : 0))
-                        .overlay(alignment: .leading) {
-                            if index > 0 {
-                                Rectangle().fill(palette.divider).frame(width: 1)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            size = option.id
-                            settingsChanged()
-                        }
-                }
+            segmented(
+                options: SettingsSheet.sizes.map { ($0.id, $0.name) },
+                selection: size
+            ) { choice in
+                size = choice
+                settingsChanged()
             }
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(palette.divider, lineWidth: 1)
-            )
         }
         .padding(.top, Self.space3)
         .overlay(alignment: .top) {
@@ -196,6 +259,8 @@ struct SettingsSheet: View {
             Button("Restore defaults") {
                 theme = AppTheme.paper.rawValue
                 size = "regular"
+                alignment = "justify"
+                measure = RenderPayload.defaultMeasure
                 settingsChanged()
             }
             .buttonStyle(GhostButtonStyle(palette: palette))

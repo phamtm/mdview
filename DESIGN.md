@@ -105,6 +105,11 @@ Three implementation notes that are easy to trip over:
 - **No hover tint on the document's name.** The design tints it with 10% accent;
   a gold wash sweeping the titlebar on every mouse pass is distracting in use.
   The caret carries the affordance instead.
+- **Layout is its own settings section**, which the design does not have: the
+  measure and the alignment are settings, not consequences of the type size. The
+  design hardcodes justified text and derives the measure from the size; here
+  Alignment (justified / left) and Column width (480–1000pt) stand on their own,
+  and Type size sets only the type.
 - **A fourth theme option, "Follow System"**, which the design does not have. It
   highlights whichever of the three is actually in effect, so the panel never
   shows an unselected set.

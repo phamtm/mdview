@@ -144,14 +144,19 @@
   }
 }
 
-/* Text size options. */
+/* Text size sets the type, not the column: the width is its own setting, so the
+   two can be chosen independently. */
 :root[data-size="small"] {
   --body-size: 15px;
-  --measure: 640px;
 }
 :root[data-size="large"] {
   --body-size: 19px;
-  --measure: 760px;
+}
+
+/* Ragged-right drops hyphenation with it; justification is what needs it. */
+:root[data-align="left"] .prose {
+  text-align: left;
+  hyphens: manual;
 }
 
 * {

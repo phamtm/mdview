@@ -17,6 +17,8 @@ struct RenderPayload {
     var showFrontmatter: Bool
     var theme: String
     var size: String
+    var alignment: String
+    var measure: Double
 
     var dictionary: [String: Any] {
         [
@@ -28,6 +30,8 @@ struct RenderPayload {
             "showFrontmatter": showFrontmatter,
             "theme": theme,
             "size": size,
+            "alignment": alignment,
+            "measure": measure,
         ]
     }
 
@@ -41,13 +45,18 @@ struct RenderPayload {
 
     /// Reads the display settings from defaults with explicit fallbacks, so
     /// behaviour never depends on whether a default was registered first.
+    /// Defaults live here, in one place, rather than in each reader.
+    static let defaultMeasure = 700.0
+
     static func settings(from defaults: UserDefaults = .standard) -> (
-        showFrontmatter: Bool, theme: String, size: String
+        showFrontmatter: Bool, theme: String, size: String, alignment: String, measure: Double
     ) {
         (
             showFrontmatter: defaults.object(forKey: "showFrontmatter") as? Bool ?? true,
             theme: defaults.string(forKey: "theme") ?? AppTheme.system.rawValue,
-            size: defaults.string(forKey: "size") ?? "regular"
+            size: defaults.string(forKey: "size") ?? "regular",
+            alignment: defaults.string(forKey: "alignment") ?? "justify",
+            measure: defaults.object(forKey: "measure") as? Double ?? defaultMeasure
         )
     }
 }
