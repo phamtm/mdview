@@ -110,8 +110,24 @@ Split deliberately, so nothing appears twice:
 The page parses the block and posts the fields to Swift. Swift does not parse
 frontmatter at all: a second parser is a second thing to keep in step.
 
-## Not yet built
+## The contents rail
 
-- **The contents rail** — tick marks down the left of the document that swell on
-  hover, a preview card, expansion after a dwell, a pin. Belongs in the page: it
-  needs heading positions.
+Lives in the page (`web/src/rail.js`), because it needs live heading offsets and
+scroll position. Three states:
+
+- **collapsed** — ticks only, sized by heading level (26/17/11pt), each swelling
+  under the pointer with a gaussian falloff so the column reads as one object
+  responding rather than a row of separate marks
+- **hovered** — the tick under the pointer names its section in a card, with the
+  first sentence that follows the heading
+- **expanded** — after dwelling 3s in the 58pt zone, the contents panel; the pin
+  keeps it open and the column shifts right to 312pt to make room
+
+Two things to know if you touch it:
+
+- **Do not defer the outline read to `requestAnimationFrame`.** WebKit throttles
+  animation frames when the window is offscreen, so the rail never initialises in
+  the snapshot harness. `getBoundingClientRect` forces layout anyway, so reading
+  synchronously is both simpler and testable.
+- **The outline is re-read after diagrams draw.** Mermaid changes the height of
+  the page, which invalidates every offset below it.

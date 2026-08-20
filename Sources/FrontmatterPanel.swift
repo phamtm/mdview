@@ -17,7 +17,13 @@ struct FrontmatterPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if showingRaw { rawView } else { parsedView }
+            if frontmatter.isEmpty {
+                emptyState
+            } else if showingRaw {
+                rawView
+            } else {
+                parsedView
+            }
         }
         .padding(Self.space4)
         .frame(width: 344)
@@ -30,6 +36,14 @@ struct FrontmatterPanel: View {
         .shadow(color: .black.opacity(0.42), radius: 22, x: 0, y: 20)
     }
 
+    /// Says so plainly, rather than opening an empty card.
+    private var emptyState: some View {
+        Text("This document has no front matter.")
+            .font(Typeface.text(12.5))
+            .foregroundStyle(palette.muted)
+            .padding(.vertical, 2)
+    }
+
     /// The one place a gold rule is used as a header underline.
     private var header: some View {
         HStack(spacing: Self.space3) {
@@ -39,7 +53,7 @@ struct FrontmatterPanel: View {
                 .textCase(.uppercase)
                 .foregroundStyle(palette.accentText)
             Spacer(minLength: 0)
-            viewToggle
+            if !frontmatter.isEmpty { viewToggle }
         }
         .padding(.bottom, Self.space2)
         .overlay(alignment: .bottom) {

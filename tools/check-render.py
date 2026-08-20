@@ -29,6 +29,10 @@ EXPECT = {
     "footnoteItems": lambda v: v == 2,
     "autolinks": lambda v: v >= 2,
     "strikethrough": lambda v: v == 1,
+    # contents rail: one tick and one panel row per heading
+    "railTicks": lambda v: v >= 8,
+    "railRows": lambda v: v >= 8,
+    "railHidden": lambda v: v is False,
 }
 
 failed = False

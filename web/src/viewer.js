@@ -6,6 +6,7 @@ import { marked } from "marked";
 import markedFootnote from "marked-footnote";
 import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
+import { createRail } from "./rail.js";
 
 (function () {
   "use strict";
@@ -405,6 +406,8 @@ import DOMPurify from "dompurify";
           '<div class="error">Mermaid: ' + escapeHtml(String((e && e.message) || e)) + "</div>";
       }
     }
+    // Diagrams change the height of the page, so the outline's offsets are stale.
+    if (token === renderToken) rail.update(elDoc);
   }
 
   /**
@@ -508,6 +511,8 @@ import DOMPurify from "dompurify";
 
   // --- appearance -----------------------------------------------------------
 
+  const rail = createRail();
+
   const THEMES = ["paper", "vellum", "night"];
   const SIZES = ["small", "regular", "large"];
 
@@ -597,6 +602,10 @@ import DOMPurify from "dompurify";
     });
 
     elDoc.classList.add("ready");
+    // getBoundingClientRect forces layout, so heading offsets are already real —
+    // no need to wait for a frame, which never arrives when the window is
+    // offscreen and rAF is throttled.
+    rail.update(elDoc);
     drawDiagrams(token);
   }
 

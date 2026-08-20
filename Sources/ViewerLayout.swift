@@ -59,7 +59,7 @@ struct ViewerView: View {
         }
         .background(palette.bg)
         .overlay(alignment: .top) {
-            if showFrontmatter, !doc.frontmatter.isEmpty {
+            if showFrontmatter, doc.url != nil {
                 ZStack(alignment: .top) {
                     // Clicking anywhere else dismisses it, as in the design.
                     Color.clear
@@ -98,7 +98,7 @@ struct ViewerView: View {
             showSettings = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleFrontmatter)) { _ in
-            guard !doc.frontmatter.isEmpty else { return }
+            guard doc.url != nil else { return }
             showFrontmatter.toggle()
         }
         .onChange(of: doc.url) { _, _ in showFrontmatter = false }
@@ -226,7 +226,7 @@ struct TitleBar: View {
     /// Clickable when the document has frontmatter, and then it carries a caret
     /// and hangs the disclosure beneath itself.
     private var documentLabel: some View {
-        let hasFrontmatter = !frontmatter.isEmpty
+        let hasDocument = name != nil
         return VStack(spacing: 1) {
             Text(name ?? "No document")
                 .font(Typeface.display(13))
@@ -242,7 +242,7 @@ struct TitleBar: View {
                         .textCase(.uppercase)
                         .lineLimit(1)
                 }
-                if hasFrontmatter {
+                if hasDocument {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .semibold))
                         .rotationEffect(.degrees(showingFrontmatter ? 180 : 0))
@@ -256,15 +256,15 @@ struct TitleBar: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(palette.accent.opacity(hoveringTitle && hasFrontmatter ? 0.10 : 0))
+                .fill(palette.accent.opacity(hoveringTitle && hasDocument ? 0.10 : 0))
         )
         .contentShape(Rectangle())
         .onHover { hoveringTitle = $0 }
         .onTapGesture {
-            guard hasFrontmatter else { return }
+            guard hasDocument else { return }
             showingFrontmatter.toggle()
         }
-        .help(hasFrontmatter ? "Front matter (⌘I)" : "")
+        .help(hasDocument ? "Front matter (⌘I)" : "")
     }
 }
 

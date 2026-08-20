@@ -50,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 NotificationCenter.default.post(name: .mdvDumpPage, object: nil)
                 try? await Task.sleep(nanoseconds: 700_000_000)
+                let fm = DocumentModel.shared.frontmatter
+                print("DOC frontmatterFields=\(fm.fields.count) rawChars=\(fm.raw.count)")
                 print("WINDOW \(WindowStyler.shared.describe())")
                 exit(0)
             }

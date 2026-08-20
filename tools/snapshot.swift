@@ -60,7 +60,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         webView.evaluateJavaScript(call + " 'ok'") { _, error in
             if let error { print("render error: \(error)") }
             // Give lazily-loaded mermaid time to draw.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.diagnose() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.driveRail() }
         }
     }
 
@@ -88,6 +88,9 @@ final class Runner: NSObject, WKNavigationDelegate {
               pwned: !!window.__pwned,
               bodyHeight: document.body.scrollHeight,
               appliedTheme: document.documentElement.dataset.theme || 'system',
+              railTicks: document.querySelectorAll('.rail-ticks .rail-tick').length,
+              railRows: document.querySelectorAll('.rail-panel .rail-row').length,
+              railHidden: !!document.querySelector('.rail-zone').hidden,
               frontmatterTitle: (document.querySelector('#doc .fm-title') || {}).textContent || 'none',
               frontmatterFields: document.querySelectorAll('#doc .fm-fields dt').length,
               frontmatterSubtitle: (document.querySelector('#doc .fm-subtitle') || {}).textContent || 'none',
@@ -121,6 +124,40 @@ final class Runner: NSObject, WKNavigationDelegate {
             if let error { print("probe error: \(error)") }
             if let s = value as? String { print("DIAGNOSTICS \(s)") }
             self.runFrontmatterTests()
+        }
+    }
+
+    /// MDVIEW_RAIL=hover|expand drives the contents rail into one of its
+    /// interactive states, which a still render otherwise cannot reach.
+    func driveRail() {
+        guard let mode = ProcessInfo.processInfo.environment["MDVIEW_RAIL"] else {
+            diagnose()
+            return
+        }
+        let enterZone = """
+            (function () {
+              const zone = document.querySelector('.rail-zone');
+              if (!zone) return 'no zone';
+              zone.dispatchEvent(new MouseEvent('mouseenter'));
+              return 'entered';
+            })()
+            """
+        let hoverTick = """
+            (function () {
+              const ticks = document.querySelectorAll('.rail-ticks .rail-tick');
+              const tick = ticks[Math.min(3, ticks.length - 1)];
+              if (!tick) return 'no tick';
+              tick.dispatchEvent(new MouseEvent('mouseenter'));
+              return 'hovered';
+            })()
+            """
+        webView.evaluateJavaScript(enterZone) { _, _ in
+            // The panel opens only after dwelling in the zone.
+            let wait = mode == "expand" ? 3.6 : 0.4
+            if mode == "hover" {
+                self.webView.evaluateJavaScript(hoverTick) { _, _ in }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { self.diagnose() }
         }
     }
 
