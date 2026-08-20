@@ -182,7 +182,6 @@ struct ViewerView: View {
 /// toggle sit left of it, the document's name and word count centred right of
 /// it. No filename in the real titlebar — that is hidden, so this is it.
 struct TitleBar: View {
-    @State private var hoveringTitle = false
     let name: String?
     let meta: String
     let sidebarWidth: CGFloat
@@ -258,12 +257,10 @@ struct TitleBar: View {
         .padding(.horizontal, 13.8)
         .padding(.vertical, 3)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(palette.accent.opacity(hoveringTitle && hasDocument ? 0.10 : 0))
-        )
+        // Deliberately no hover fill. The design tints this with 10% accent, but
+        // a gold wash across the titlebar is distracting on every mouse pass; the
+        // caret is the affordance.
         .contentShape(Rectangle())
-        .onHover { hoveringTitle = $0 }
         .onTapGesture {
             guard hasDocument else { return }
             showingFrontmatter.toggle()

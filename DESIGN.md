@@ -78,6 +78,17 @@ Three implementation notes that are easy to trip over:
 - **Test every theme.** The bug above passed a suite that only rendered the
   default one. `tools/run-tests.sh` now renders all three.
 
+## Deliberate departures from the spec
+
+- **No hover tint on the document's name.** The design tints it with 10% accent;
+  a gold wash sweeping the titlebar on every mouse pass is distracting in use.
+  The caret carries the affordance instead.
+- **A fourth theme option, "Follow System"**, which the design does not have. It
+  highlights whichever of the three is actually in effect, so the panel never
+  shows an unselected set.
+- **The frontmatter disclosure opens for any document**, saying when there is
+  none, rather than being inert on documents without a block.
+
 ## Where things live
 
 | Concern | File |
