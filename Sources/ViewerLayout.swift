@@ -60,7 +60,7 @@ struct ViewerView: View {
                         .zIndex(1)
                 }
 
-                ViewerWebView(doc: doc)
+                ViewerWebView(doc: doc, background: palette.bg)
                     .frame(minWidth: 420, minHeight: 320)
             }
         }
@@ -113,7 +113,7 @@ struct ViewerView: View {
         // otherwise gives the header button focus at launch and draws a ring
         // around it. Inherited by every descendant.
         .focusEffectDisabled()
-        .background(WindowChrome())
+        .background(WindowChrome(background: palette.bg))
         .onAppear {
             // The old default (238) was set before DESIGN.md; move anyone still on
             // it to the new one. A width the user actually chose is left alone.
@@ -308,7 +308,7 @@ struct IconButton: View {
 final class WindowStyler {
     static let shared = WindowStyler()
 
-    func apply(_ window: NSWindow?) {
+    func apply(_ window: NSWindow?, background: NSColor? = nil) {
         let targets = window.map { [$0] } ?? NSApp.windows
         for target in targets where target.styleMask.contains(.titled) {
             // An empty unified toolbar is what moves the traffic lights down to
@@ -324,8 +324,8 @@ final class WindowStyler {
             }
             if !target.titlebarAppearsTransparent { target.titlebarAppearsTransparent = true }
             if target.titleVisibility != .hidden { target.titleVisibility = .hidden }
-            if target.backgroundColor != .textBackgroundColor {
-                target.backgroundColor = .textBackgroundColor
+            if let background, target.backgroundColor != background {
+                target.backgroundColor = background
             }
         }
     }
@@ -343,7 +343,14 @@ final class WindowStyler {
         {
             buttonCentre = window.frame.height - frame.maxY + frame.height / 2
         }
+        let windowBackground =
+            window.backgroundColor.usingColorSpace(.sRGB).map {
+                String(
+                    format: "#%02x%02x%02x", Int($0.redComponent * 255),
+                    Int($0.greenComponent * 255), Int($0.blueComponent * 255))
+            } ?? "none"
         return [
+            "windowBg=\(windowBackground)",
             "buttonCentre=\(Int(buttonCentre.rounded()))",
             "firstResponder=\(responder)",
             "titleVisibility=\(window.titleVisibility == .hidden ? "hidden" : "visible")",
@@ -357,13 +364,21 @@ final class WindowStyler {
 
 /// Applies the chrome for whichever window hosts this view.
 struct WindowChrome: NSViewRepresentable {
+    /// The window's own background shows at the frame's edges during a resize,
+    /// and behind everything else. It has to be the theme's, not the system's.
+    var background: Color = .clear
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async { WindowStyler.shared.apply(view.window) }
+        DispatchQueue.main.async {
+            WindowStyler.shared.apply(view.window, background: NSColor(background))
+        }
         return view
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async { WindowStyler.shared.apply(view.window) }
+        DispatchQueue.main.async {
+            WindowStyler.shared.apply(view.window, background: NSColor(background))
+        }
     }
 }

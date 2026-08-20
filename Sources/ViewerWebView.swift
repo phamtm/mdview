@@ -84,6 +84,10 @@ enum Viewer {
 
 struct ViewerWebView: NSViewRepresentable {
     @ObservedObject var doc: DocumentModel
+    /// WebKit paints this behind the page — which is what shows when you
+    /// rubber-band past either end. A system colour here reads as a black band
+    /// in the dark theme.
+    var background: Color
 
     /// Inside the app this comes from the bundle; the design/snapshot tools run
     /// outside one and read the working copy instead.
@@ -100,8 +104,7 @@ struct ViewerWebView: NSViewRepresentable {
 
         let webView = DroppableWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
-        // Avoid a white flash before the page paints its own background.
-        webView.underPageBackgroundColor = .textBackgroundColor
+        webView.underPageBackgroundColor = NSColor(background)
         webView.allowsMagnification = true
         webView.onDroppedFile = { url in
             Task { @MainActor in DocumentModel.shared.open(url) }
@@ -119,6 +122,8 @@ struct ViewerWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: DroppableWebView, context: Context) {
         context.coordinator.doc = doc
+        let colour = NSColor(background)
+        if webView.underPageBackgroundColor != colour { webView.underPageBackgroundColor = colour }
         context.coordinator.renderIfNeeded()
     }
 
@@ -254,6 +259,13 @@ struct ViewerWebView: NSViewRepresentable {
         /// Reports what the page actually rendered, so a test can check the real
         /// app rather than a harness that builds its own payload.
         private func dumpPage() {
+            let pageBackground =
+                webView?.underPageBackgroundColor.usingColorSpace(.sRGB).map {
+                    String(
+                        format: "#%02x%02x%02x", Int($0.redComponent * 255),
+                        Int($0.greenComponent * 255), Int($0.blueComponent * 255))
+                } ?? "none"
+            print("PAGEBG \(pageBackground)")
             let probe =
                 "JSON.stringify({theme: document.documentElement.dataset.theme || 'system', "
                 + "size: document.documentElement.dataset.size || 'regular', "

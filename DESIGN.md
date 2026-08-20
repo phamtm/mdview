@@ -82,6 +82,12 @@ but it means **a colour changed in one must be changed in the other.**
 
 Three implementation notes that are easy to trip over:
 
+- **Three surfaces need the theme colour, not one.** The stylesheet paints the
+  page, but AppKit paints the window frame and WebKit paints the area behind the
+  page — which is what shows when you rubber-band past either end. Left as system
+  colours, those two read as a black edge and a black overscroll band in Colophon.
+  `tools/check-theme.sh` asks the running app for both and fails if they drift from
+  the theme.
 - **Fonts ship twice too.** The page loads woff2 (small, and all WebKit needs);
   the chrome needs real TTFs, because CoreText cannot register woff2. Both sit in
   `Resources/fonts/`, and neither can come from Google's CDN — the page's CSP

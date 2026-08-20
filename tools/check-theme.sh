@@ -30,11 +30,45 @@ trap restore EXIT
 fail=0
 for theme in paper vellum night; do
   defaults write "$DOMAIN" theme "$theme"
-  out="$(MDVIEW_WINDOW_DUMP=1 MDVIEW_DUMP_DOC="$doc" "$APP" 2>&1 | grep '^PAGE ' || true)"
+  dump="$(MDVIEW_WINDOW_DUMP=1 MDVIEW_DUMP_DOC="$doc" "$APP" 2>&1)"
+  out="$(echo "$dump" | grep '^PAGE ' || true)"
   case "$out" in
     *"\"theme\":\"$theme\""*) echo "  ok   $theme applied to the document" ;;
     *) echo "  FAIL asked for $theme, page reported: ${out:-no report}"; fail=1 ;;
   esac
+
+  # The window frame and the overscroll area are painted by AppKit and WebKit, not
+  # by the stylesheet. A system colour there shows as a black edge and a black
+  # rubber-band in the dark theme.
+  page="$(echo "$dump" | awk '/^PAGEBG/ {print $2}')"
+  frame="$(echo "$dump" | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^windowBg=/) { sub(/windowBg=/, "", $i); print $i }}')"
+  if [ -z "$page" ] || [ -z "$frame" ]; then
+    echo "  FAIL $theme: no background reported (page='$page' frame='$frame')"
+    fail=1
+  elif ! python3 - "$page" "$frame" "$theme" <<'CHECK'
+import sys
+page, frame, theme = sys.argv[1], sys.argv[2], sys.argv[3]
+def rgb(value):
+    return [int(value[i:i + 2], 16) for i in (1, 3, 5)]
+p, f = rgb(page), rgb(frame)
+# Two conversions round independently, so allow a unit per channel.
+if any(abs(a - b) > 2 for a, b in zip(p, f)):
+    print(f"    page {page} and frame {frame} disagree")
+    raise SystemExit(1)
+luma = sum(p) / 3
+if theme == "night" and luma > 90:
+    print(f"    {theme} background {page} is too light to be the dark theme")
+    raise SystemExit(1)
+if theme == "paper" and luma < 200:
+    print(f"    {theme} background {page} is too dark to be the light theme")
+    raise SystemExit(1)
+CHECK
+  then
+    echo "  FAIL $theme: window/overscroll background is not the theme's"
+    fail=1
+  else
+    echo "  ok   $theme paints frame and overscroll $page"
+  fi
 done
 
 exit $fail
