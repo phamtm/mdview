@@ -226,17 +226,21 @@ struct TitleBar: View {
         HStack(spacing: 0) {
             leftZone
             documentLabel
-            if canCopy {
-                CopyButton(palette: palette)
+            // A cluster, not a row of touching squares: --space-2 between them,
+            // --space-3 to the window edge.
+            HStack(spacing: 9.2) {
+                if canCopy {
+                    CopyButton(palette: palette)
+                }
+                IconButton(
+                    symbol: "list.bullet", palette: palette, active: outlineOpen,
+                    action: toggleOutline
+                )
+                .help("Contents (⌥⌘O)")
+                IconButton(symbol: "gearshape", palette: palette, action: openSettings)
+                    .help("Settings (⌘,)")
             }
-            IconButton(
-                symbol: "list.bullet", palette: palette, active: outlineOpen,
-                action: toggleOutline
-            )
-            .help("Contents (⌥⌘O)")
-            IconButton(symbol: "gearshape", palette: palette, action: openSettings)
-                .help("Settings (⌘,)")
-                .padding(.trailing, 13.8)
+            .padding(.trailing, 13.8)
         }
         .frame(height: ViewerView.titlebarHeight)
         .background(palette.surface)

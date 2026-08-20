@@ -121,7 +121,10 @@ Three implementation notes that are easy to trip over:
 
 ## The titlebar's right side
 
-Copy, then settings. Copy puts the document's **markdown source** on the clipboard,
+Copy, contents, settings — spaced `--space-2` apart with `--space-3` to the window
+edge, so they read as a cluster of three rather than one wide control.
+
+Copy puts the document's **markdown source** on the clipboard,
 not the rendered text, and appears only for markdown files — the app opens plain
 text too, where "copy the markdown" means nothing. `⌥⌘C` does the same, and the
 icon becomes a tick for a moment so the click is acknowledged.
