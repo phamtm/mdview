@@ -1,0 +1,20 @@
+{
+  "name": "mdview-web",
+  "private": true,
+  "type": "module",
+  "description": "The document renderer that runs inside MDView's WebKit view.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.14",
+    "highlight.js": "^11.12.0",
+    "marked": "^18.0.10",
+    "marked-footnote": "^1.4.0",
+    "mermaid": "^11.17.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
