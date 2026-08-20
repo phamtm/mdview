@@ -14,6 +14,7 @@ extension Notification.Name {
     static let mdvSettingsChanged = Notification.Name("mdv.settingsChanged")
     static let mdvToggleSidebar = Notification.Name("mdv.toggleSidebar")
     static let mdvReloadPage = Notification.Name("mdv.reloadPage")
+    static let mdvOpenSettings = Notification.Name("mdv.openSettings")
 }
 
 /// WKWebView that accepts dropped markdown files instead of letting WebKit

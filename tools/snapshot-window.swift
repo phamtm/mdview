@@ -89,6 +89,13 @@ MainActor.assumeIsolated {
     workspace.add(reference)
     DocumentModel.shared.open(readme)
 
+    // Set MDVIEW_SETTINGS=1 to capture the settings panel open.
+    if ProcessInfo.processInfo.environment["MDVIEW_SETTINGS"] == "1" {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            NotificationCenter.default.post(name: .mdvOpenSettings, object: nil)
+        }
+    }
+
     let root = ViewerView()
         .environmentObject(DocumentModel.shared)
         .environmentObject(WorkspaceModel.shared)
@@ -140,6 +147,14 @@ MainActor.assumeIsolated {
         frameView.cacheDisplay(in: frameView.bounds, to: rep)
         let composed = NSImage(size: frameView.bounds.size)
         composed.addRepresentation(rep)
+
+        // The settings panel is centred, so it sits inside the web view's rect —
+        // compositing the document over it would hide the thing being captured.
+        if ProcessInfo.processInfo.environment["MDVIEW_SETTINGS"] == "1" {
+            write(composed)
+            app.terminate(nil)
+            return
+        }
 
         guard let web = findWebView(frameView) else {
             print("warning: no web view found, chrome only")

@@ -11,6 +11,8 @@ struct ViewerView: View {
     @AppStorage("sidebarWidth") private var storedWidth = ViewerView.sidebarDefaultWidth
     @State private var widthAtDragStart: CGFloat?
     @AppStorage("theme") private var themeName = AppTheme.system.rawValue
+    @AppStorage("size") private var sizeName = "regular"
+    @State private var showSettings = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
@@ -29,7 +31,8 @@ struct ViewerView: View {
                 sidebarWidth: sidebarVisible ? storedWidth : 120,
                 sidebarVisible: sidebarVisible,
                 palette: palette,
-                toggleSidebar: toggleSidebar
+                toggleSidebar: toggleSidebar,
+                openSettings: { showSettings = true }
             )
 
             HStack(spacing: 0) {
@@ -49,6 +52,25 @@ struct ViewerView: View {
             }
         }
         .background(palette.bg)
+        .overlay {
+            if showSettings {
+                SettingsSheet(
+                    theme: $themeName,
+                    size: $sizeName,
+                    effectiveTheme: colorScheme == .dark
+                        ? AppTheme.night.rawValue : AppTheme.paper.rawValue,
+                    palette: palette,
+                    close: { showSettings = false },
+                    settingsChanged: {
+                        NotificationCenter.default.post(name: .mdvSettingsChanged, object: nil)
+                    }
+                )
+                .transition(.opacity)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvOpenSettings)) { _ in
+            showSettings = true
+        }
         // The titlebar is transparent, so content owns the whole window frame.
         .ignoresSafeArea()
         // No focus rings on any control: this is a reading window, and SwiftUI
@@ -135,11 +157,15 @@ struct TitleBar: View {
     let sidebarVisible: Bool
     let palette: Palette
     let toggleSidebar: () -> Void
+    let openSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             leftZone
             documentLabel
+            IconButton(symbol: "gearshape", palette: palette, action: openSettings)
+                .help("Settings (⌘,)")
+                .padding(.trailing, 13.8)
         }
         .frame(height: ViewerView.titlebarHeight)
         .background(palette.surface)

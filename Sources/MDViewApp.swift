@@ -80,6 +80,11 @@ struct ViewerCommands: Commands {
     }
 
     var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { send(.mdvOpenSettings) }
+                .keyboardShortcut(",")
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("Open…") { doc.openPanel() }
                 .keyboardShortcut("o")
