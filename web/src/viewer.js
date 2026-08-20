@@ -511,7 +511,7 @@ import { createRail } from "./rail.js";
 
   // --- appearance -----------------------------------------------------------
 
-  const rail = createRail();
+  const rail = createRail(post);
 
   const THEMES = ["paper", "vellum", "night"];
   const SIZES = ["small", "regular", "large"];
@@ -672,6 +672,10 @@ import { createRail } from "./rail.js";
   window.mdview = {
     render,
     openFind,
+    /** The contents panel in the chrome asks for a jump by index. */
+    scrollToHeading(index) {
+      rail.jumpTo(Number(index));
+    },
     // Exposed so the test harness can exercise the parser directly.
     _internals: { splitFrontmatter, parseFields },
     /** Called by the app when the system appearance changes. */

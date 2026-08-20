@@ -78,27 +78,6 @@ if abs(card - tick) > 6:
 print(f"  ok   preview centred on its tick ({card} vs {tick})")
 CHECK
 
-echo "==> pinning the contents rail moves the column, not shrinks it"
-MDVIEW_WIDTH=1400 ./build/snapshot Resources sample.md build/shot-wide light >build/diag-wide.txt
-MDVIEW_WIDTH=1400 MDVIEW_RAIL=pin ./build/snapshot Resources sample.md build/shot-pinned light \
-  >build/diag-pinned.txt
-python3 - <<'CHECK'
-import json
-def read(path):
-    return json.loads(open(path).read().split("DIAGNOSTICS ", 1)[1].splitlines()[0])
-loose, pinned = read("build/diag-wide.txt"), read("build/diag-pinned.txt")
-if not pinned["railPinned"]:
-    print("  FAIL the pin did not engage")
-    raise SystemExit(1)
-# box-sizing is border-box, so the pinned padding has to be matched by a wider
-# measure or the text column loses that width instead of moving right.
-if abs(loose["proseTextWidth"] - pinned["proseTextWidth"]) > 2:
-    print(f"  FAIL text column changed width when pinned: "
-          f"{loose['proseTextWidth']} -> {pinned['proseTextWidth']}")
-    raise SystemExit(1)
-print(f"  ok   column keeps its measure when pinned ({pinned['proseTextWidth']}px)")
-CHECK
-
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
 ./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
 python3 - <<'CHECK'

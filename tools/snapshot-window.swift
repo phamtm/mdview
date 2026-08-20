@@ -34,6 +34,9 @@ struct TrafficLights: View {
 
 MainActor.assumeIsolated {
     Typeface.register()
+    if ProcessInfo.processInfo.environment["MDVIEW_OUTLINE"] == "1" {
+        UserDefaults.standard.set(true, forKey: "outlineVisible")
+    }
     // Set MDVIEW_SIDEBAR_CLOSED=1 to capture the collapsed left zone.
     if ProcessInfo.processInfo.environment["MDVIEW_SIDEBAR_CLOSED"] == "1" {
         UserDefaults.standard.set(false, forKey: "sidebarVisible")

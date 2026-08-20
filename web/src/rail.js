@@ -1,13 +1,12 @@
-/* The contents rail: a column of tick marks down the left of the document.
+/* The tick rail: a passive position indicator down the left of the document.
  *
- * Three states, per the design:
- *   collapsed — ticks only, sized by heading level, swelling under the pointer
- *   hovered   — the tick under the pointer names its section in a card
- *   expanded  — after dwelling in the rail zone, the full contents panel; the
- *               pin keeps it open and the column shifts right to make room
+ * Ticks are sized by heading level and swell under the pointer; hovering one
+ * names its section. Clicking jumps. It deliberately does *not* expand into a
+ * contents panel any more — that lived behind a two-second dwell, which meant
+ * you had to know it was there. The outline is a panel in the chrome now, and
+ * this rail reports the headings to it.
  */
 
-const DWELL_MS = 2000;
 const SNIPPET_CHARS = 116;
 /** Tick length by heading level, before any hover swell. */
 const TICK_WIDTH = { 1: 26, 2: 17, 3: 11 };
@@ -19,24 +18,21 @@ function element(tag, className) {
   return node;
 }
 
-export function createRail() {
+/**
+ * @param {(message: object) => void} post sends the outline, and the current
+ *   section as it changes, to the app.
+ */
+export function createRail(post) {
   const zone = element("div", "rail-zone");
   const ticks = element("div", "rail-ticks");
   const card = element("div", "rail-card");
-  const panel = element("div", "rail-panel");
   card.hidden = true;
-  panel.hidden = true;
-  zone.append(ticks, card, panel);
+  zone.append(ticks, card);
   document.body.appendChild(zone);
 
   let headings = [];
   let current = -1;
   let hovered = -1;
-  let expanded = false;
-  let pinned = false;
-  let dwellTimer = null;
-
-  // --- geometry -------------------------------------------------------------
 
   /**
    * Ticks nearest the pointer grow, with a gaussian falloff, so the rail reads
@@ -57,31 +53,15 @@ export function createRail() {
     }
   }
 
-  function paintPanel() {
-    const rows = panel.querySelectorAll(".rail-row");
-    rows.forEach((row, index) => row.classList.toggle("current", index === current));
-  }
-
   function jumpTo(index) {
     const heading = headings[index];
     if (!heading) return;
     window.scrollTo({ top: Math.max(0, heading.top - SCROLL_OFFSET), behavior: "smooth" });
   }
 
-  // --- states ---------------------------------------------------------------
-
-  function setExpanded(next) {
-    expanded = next;
-    panel.hidden = !next;
-    ticks.hidden = next;
-    if (next) hideCard();
-    zone.classList.toggle("expanded", next);
-    document.body.classList.toggle("rail-pinned", next && pinned);
-  }
-
   function showCard(index) {
     const heading = headings[index];
-    if (!heading || expanded) return;
+    if (!heading) return;
     card.innerHTML = "";
     const title = element("div", "rail-card-title");
     title.textContent = heading.title;
@@ -107,21 +87,11 @@ export function createRail() {
     card.hidden = true;
   }
 
-  zone.addEventListener("mouseenter", () => {
-    clearTimeout(dwellTimer);
-    // Dwelling, not passing through: the rail only opens if you stay in it.
-    dwellTimer = setTimeout(() => setExpanded(true), DWELL_MS);
-  });
-
   zone.addEventListener("mouseleave", () => {
-    clearTimeout(dwellTimer);
     hovered = -1;
     hideCard();
     paintTicks();
-    if (!pinned) setExpanded(false);
   });
-
-  // --- building -------------------------------------------------------------
 
   /** Reads the outline out of the rendered document. */
   function readOutline(root) {
@@ -157,45 +127,6 @@ export function createRail() {
     });
   }
 
-  function buildPanel() {
-    panel.innerHTML = "";
-    const head = element("div", "rail-panel-head");
-    const label = element("div", "rail-panel-label");
-    label.textContent = "Contents";
-    const pin = element("button", "rail-pin");
-    pin.type = "button";
-    pin.title = "Keep open";
-    pin.innerHTML =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-      'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-      '<path d="M12 17v5"></path>' +
-      '<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 ' +
-      "0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 " +
-      '2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>';
-    pin.addEventListener("click", () => {
-      pinned = !pinned;
-      pin.classList.toggle("pinned", pinned);
-      document.body.classList.toggle("rail-pinned", pinned);
-      if (!pinned) setExpanded(false);
-    });
-    pin.classList.toggle("pinned", pinned);
-    head.append(label, pin);
-    panel.appendChild(head);
-
-    headings.forEach((heading, index) => {
-      const row = element("div", `rail-row level-${heading.level}`);
-      row.appendChild(element("span", "rail-row-tick"));
-      const title = element("span", "rail-row-title");
-      title.textContent = heading.title;
-      row.appendChild(title);
-      row.addEventListener("click", () => {
-        jumpTo(index);
-        if (!pinned) setExpanded(false);
-      });
-      panel.appendChild(row);
-    });
-  }
-
   function trackScroll() {
     let next = headings.length ? 0 : -1;
     headings.forEach((heading, index) => {
@@ -204,7 +135,8 @@ export function createRail() {
     if (next !== current) {
       current = next;
       paintTicks();
-      paintPanel();
+      // The panel in the chrome highlights the same section.
+      post({ action: "outlinePosition", index: current });
     }
   }
 
@@ -220,10 +152,16 @@ export function createRail() {
       headings = readOutline(root);
       zone.hidden = headings.length < 2;
       buildTicks();
-      buildPanel();
       current = -1;
       trackScroll();
       paintTicks();
+      post({
+        action: "outline",
+        headings: headings.map(({ level, title }) => ({ level, title })),
+      });
     },
+
+    /** Called by the app when a row in the contents panel is clicked. */
+    jumpTo,
   };
 }

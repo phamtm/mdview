@@ -19,6 +19,25 @@ let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
 app.appearance = NSAppearance(named: mode == "dark" ? .darkAqua : .aqua)
 
+/// Records what the page posts to the app, so a test can assert on it.
+final class MessageRecorder: NSObject, WKScriptMessageHandler {
+    static let shared = MessageRecorder()
+    private(set) var actions: [String] = []
+    private(set) var outlineCount = -1
+
+    func userContentController(
+        _ controller: WKUserContentController, didReceive message: WKScriptMessage
+    ) {
+        guard let body = message.body as? [String: Any],
+            let action = body["action"] as? String
+        else { return }
+        actions.append(action)
+        if action == "outline" {
+            outlineCount = (body["headings"] as? [[String: Any]])?.count ?? 0
+        }
+    }
+}
+
 final class Runner: NSObject, WKNavigationDelegate {
     let webView: WKWebView
     let window: NSWindow
@@ -26,6 +45,9 @@ final class Runner: NSObject, WKNavigationDelegate {
 
     override init() {
         let config = WKWebViewConfiguration()
+        // The app registers this handler, so without it every post() from the
+        // page is silently dropped and the harness tests a lookalike.
+        config.userContentController.add(MessageRecorder.shared, name: "mdview")
         // MDVIEW_WIDTH widens the page, for layout that depends on the measure
         // fitting inside the viewport.
         let pageWidth = Double(ProcessInfo.processInfo.environment["MDVIEW_WIDTH"] ?? "") ?? 900
@@ -98,7 +120,6 @@ final class Runner: NSObject, WKNavigationDelegate {
               railRows: document.querySelectorAll('.rail-panel .rail-row').length,
               railHidden: !!document.querySelector('.rail-zone').hidden,
               asciiBlocks: document.querySelectorAll('#doc figure.code.ascii').length,
-              railPinned: document.body.classList.contains('rail-pinned'),
               appliedAlign: getComputedStyle(document.querySelector('#doc')).textAlign,
               appliedMeasure: getComputedStyle(document.documentElement)
                 .getPropertyValue('--measure').trim(),
@@ -159,12 +180,15 @@ final class Runner: NSObject, WKNavigationDelegate {
         webView.evaluateJavaScript(probe) { value, error in
             if let error { print("probe error: \(error)") }
             if let s = value as? String { print("DIAGNOSTICS \(s)") }
+            print(
+                "POSTED actions=\(Set(MessageRecorder.shared.actions).sorted().joined(separator: ",")) "
+                    + "outlineHeadings=\(MessageRecorder.shared.outlineCount)")
             self.runFrontmatterTests()
         }
     }
 
-    /// MDVIEW_RAIL=hover|expand drives the contents rail into one of its
-    /// interactive states, which a still render otherwise cannot reach.
+    /// MDVIEW_RAIL=hover hovers a tick, which a still render cannot otherwise
+    /// reach. The rail no longer expands — the outline is a panel in the chrome.
     func driveRail() {
         guard let mode = ProcessInfo.processInfo.environment["MDVIEW_RAIL"] else {
             diagnose()
@@ -178,14 +202,6 @@ final class Runner: NSObject, WKNavigationDelegate {
               return 'entered';
             })()
             """
-        let clickPin = """
-            (function () {
-              const pin = document.querySelector('.rail-pin');
-              if (!pin) return 'no pin';
-              pin.click();
-              return 'pinned';
-            })()
-            """
         let hoverTick = """
             (function () {
               const ticks = document.querySelectorAll('.rail-ticks .rail-tick');
@@ -197,16 +213,10 @@ final class Runner: NSObject, WKNavigationDelegate {
             """
         webView.evaluateJavaScript(enterZone) { _, _ in
             // The panel opens only after dwelling in the zone.
-            let wait = mode == "hover" ? 0.4 : 2.6
             if mode == "hover" {
                 self.webView.evaluateJavaScript(hoverTick) { _, _ in }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
-                guard mode == "pin" else { self.diagnose(); return }
-                self.webView.evaluateJavaScript(clickPin) { _, _ in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.diagnose() }
-                }
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.diagnose() }
         }
     }
 

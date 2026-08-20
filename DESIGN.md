@@ -187,6 +187,46 @@ Split deliberately, so nothing appears twice:
 The page parses the block and posts the fields to Swift. Swift does not parse
 frontmatter at all: a second parser is a second thing to keep in step.
 
+## The outline: a rail and a panel
+
+Two pieces, with different jobs:
+
+- **The tick rail** (`web/src/rail.js`) is a passive indicator down the left of the
+  column: ticks sized by heading level, swelling under the pointer, naming their
+  section on hover, jumping on click. It costs no horizontal space and shows where
+  you are at a glance.
+- **The contents panel** (`Sources/OutlinePanel.swift`) is the navigable list, on
+  the **right**, toggled from the titlebar or `⌥⌘O`. Left answers "where am I in my
+  files"; right answers "where am I in this document".
+
+The design has the rail expand into a contents panel after dwelling two seconds in
+its zone. That is gone: an outline you have to know about, and then wait for, is
+not an outline you use. The panel replaced it.
+
+The page owns the outline, because it needs live heading offsets and scroll
+position; it posts the headings and the current index to the app, and the app posts
+back a heading index to scroll to. Same shape as frontmatter.
+
+Two things to know if you touch it:
+
+- **Do not defer the outline read to `requestAnimationFrame`.** WebKit throttles
+  animation frames when the window is offscreen, so the rail never initialises in
+  the snapshot harness. `getBoundingClientRect` forces layout anyway.
+- **The outline is re-read after diagrams draw.** Mermaid changes the height of
+  the page, which invalidates every offset below it.
+
+## Frontmatter, and where it is shown
+
+Split deliberately, so nothing appears twice:
+
+- **The document** carries `title` as its display head and `subtitle` as an italic
+  line beneath it.
+- **The titlebar disclosure** (`⌘I`, or click the document's name) carries every
+  other field — rows with hairlines, list values as outlined pills.
+
+The page parses the block and posts the fields to Swift. Swift does not parse
+frontmatter at all: a second parser is a second thing to keep in step.
+
 ## The contents rail
 
 Lives in the page (`web/src/rail.js`), because it needs live heading offsets and

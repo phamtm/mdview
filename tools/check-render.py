@@ -31,7 +31,6 @@ EXPECT = {
     "strikethrough": lambda v: v == 1,
     # contents rail: one tick and one panel row per heading
     "railTicks": lambda v: v >= 8,
-    "railRows": lambda v: v >= 8,
     "railHidden": lambda v: v is False,
     "asciiBlocks": lambda v: v == 1,
 }
@@ -39,6 +38,21 @@ EXPECT = {
 failed = False
 for path in sys.argv[1:]:
     raw = open(path).read()
+    # The page posts its outline to the app, which draws the contents panel.
+    posted = [line for line in raw.splitlines() if line.startswith("POSTED ")]
+    if not posted:
+        print(f"  FAIL {path}: page posted nothing to the app")
+        failed = True
+    else:
+        fields = dict(part.split("=", 1) for part in posted[0].removeprefix("POSTED ").split(" "))
+        if "outline" not in fields.get("actions", ""):
+            print(f"  FAIL {path}: no outline posted (actions: {fields.get('actions')!r})")
+            failed = True
+        elif int(fields.get("outlineHeadings", -1)) < 8:
+            print(f"  FAIL {path}: outline has {fields.get('outlineHeadings')} headings")
+            failed = True
+        else:
+            print(f"  ok   {path}: outline posted ({fields['outlineHeadings']} headings)")
     if "FRONTMATTER " in raw:
         fm = json.loads(raw.split("FRONTMATTER ", 1)[1].splitlines()[0])
         for failure in fm.get("failures", []):

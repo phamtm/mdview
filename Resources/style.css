@@ -1039,144 +1039,16 @@ body {
   color: var(--muted);
 }
 
-.rail-panel {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 262px;
-  max-height: 74%;
-  overflow-y: auto;
-  padding: var(--space-3) var(--space-3) var(--space-3) 0;
-  background: var(--bg);
-  border: 1px solid var(--divider);
-  border-left: 2px solid var(--accent);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  box-shadow: var(--shadow-md);
-}
-.rail-panel[hidden] {
-  display: none;
-}
-
-.rail-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: 0 0 var(--space-2) var(--space-4);
-  margin-bottom: var(--space-2);
-  border-bottom: 1px solid var(--divider);
-}
-
-.rail-panel-label {
-  font-family: var(--font-heading);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.rail-pin {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  cursor: default;
-}
-.rail-pin:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.rail-pin.pinned {
-  color: var(--accent-text);
-}
-
-.rail-row {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  padding: 5px var(--space-2) 5px 0;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  cursor: default;
-  transition: background 120ms ease;
-}
-.rail-row:hover {
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-}
-.rail-row.current {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.rail-row.current .rail-row-title {
-  color: var(--accent-text);
-}
-.rail-row.current .rail-row-tick {
-  background: var(--accent);
-}
-
-.rail-row-tick {
-  flex-shrink: 0;
-  height: 1px;
-  margin-top: 8px;
-  background: color-mix(in srgb, var(--text) 28%, transparent);
-}
-
-.rail-row-title {
-  line-height: 1.3;
-  color: var(--text);
-  font-family: var(--font-heading);
-}
-
-.rail-row.level-1 {
-  padding-left: 14px;
-}
-.rail-row.level-1 .rail-row-tick {
-  width: 14px;
-}
-.rail-row.level-1 .rail-row-title {
-  font-size: 14.5px;
-}
-.rail-row.level-2 {
-  padding-left: 26px;
-}
-.rail-row.level-2 .rail-row-tick {
-  width: 9px;
-}
-.rail-row.level-2 .rail-row-title {
-  font-size: 13.5px;
-}
-.rail-row.level-3 {
-  padding-left: 40px;
-}
-.rail-row.level-3 .rail-row-tick {
-  width: 6px;
-}
-.rail-row.level-3 .rail-row-title {
-  font-size: 12.5px;
-  font-family: var(--font-body);
-}
-
-/* The column leaves room for the rail, and shifts right when it is pinned.
-   The measure grows by exactly the extra padding: box-sizing is border-box, so
-   without that the text would lose 244px of width instead of moving right. */
+/* The column leaves room for the tick rail. */
 .prose {
   padding-left: 68px;
-}
-body.rail-pinned .prose {
-  padding-left: 312px;
-  max-width: calc(var(--measure) + 244px);
 }
 
 @media print {
   .rail-zone {
     display: none !important;
   }
-  .prose,
-  body.rail-pinned .prose {
+  .prose {
     padding-left: 0;
   }
 }

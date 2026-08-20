@@ -16,6 +16,7 @@ struct ViewerView: View {
     @AppStorage("measure") private var measureWidth = RenderPayload.defaultMeasure
     @State private var showSettings = false
     @State private var showFrontmatter = false
+    @AppStorage("outlineVisible") private var outlineVisible = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
@@ -41,6 +42,8 @@ struct ViewerView: View {
                 sidebarWidth: sidebarVisible ? storedWidth : ViewerView.collapsedZone,
                 sidebarVisible: sidebarVisible,
                 canCopy: Viewer.isMarkdown(doc.url),
+                outlineOpen: outlineVisible,
+                toggleOutline: toggleOutline,
                 frontmatter: doc.frontmatter,
                 showingFrontmatter: $showFrontmatter,
                 palette: palette,
@@ -63,6 +66,17 @@ struct ViewerView: View {
 
                 ViewerWebView(doc: doc, background: palette.bg)
                     .frame(minWidth: 420, minHeight: 320)
+
+                if outlineVisible {
+                    OutlinePanel(outline: doc.outline, palette: palette) { index in
+                        NotificationCenter.default.post(
+                            name: .mdvScrollToHeading, object: index as NSNumber)
+                    }
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(palette.divider).frame(width: 1)
+                    }
+                    .transition(.move(edge: .trailing))
+                }
             }
         }
         .background(palette.bg)
@@ -135,6 +149,9 @@ struct ViewerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleSidebar)) { _ in
             toggleSidebar()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvToggleOutline)) { _ in
+            toggleOutline()
+        }
     }
 
     private var palette: Palette {
@@ -147,6 +164,10 @@ struct ViewerView: View {
         if let error = doc.loadError { return error }
         let words = doc.markdown.split(whereSeparator: { $0 == " " || $0.isNewline }).count
         return words == 1 ? "1 word" : "\(words.formatted()) words"
+    }
+
+    private func toggleOutline() {
+        withAnimation(.easeOut(duration: 0.2)) { outlineVisible.toggle() }
     }
 
     private func toggleSidebar() {
@@ -193,6 +214,8 @@ struct TitleBar: View {
     let sidebarWidth: CGFloat
     let sidebarVisible: Bool
     let canCopy: Bool
+    let outlineOpen: Bool
+    let toggleOutline: () -> Void
     let frontmatter: Frontmatter
     @Binding var showingFrontmatter: Bool
     let palette: Palette
@@ -206,6 +229,11 @@ struct TitleBar: View {
             if canCopy {
                 CopyButton(palette: palette)
             }
+            IconButton(
+                symbol: "list.bullet", palette: palette, active: outlineOpen,
+                action: toggleOutline
+            )
+            .help("Contents (⌥⌘O)")
             IconButton(symbol: "gearshape", palette: palette, action: openSettings)
                 .help("Settings (⌘,)")
                 .padding(.trailing, 13.8)
@@ -301,6 +329,9 @@ struct CopyButton: View {
 struct IconButton: View {
     let symbol: String
     let palette: Palette
+    /// A toggle that is currently on keeps the gold wash, so its state is visible
+    /// without hovering it.
+    var active = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -308,11 +339,11 @@ struct IconButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(hovering ? palette.accentText : palette.muted)
+                .foregroundStyle(active || hovering ? palette.accentText : palette.muted)
                 .frame(width: 26, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(palette.accent.opacity(hovering ? 0.14 : 0))
+                        .fill(palette.accent.opacity(active ? 0.16 : (hovering ? 0.14 : 0)))
                 )
                 .contentShape(Rectangle())
         }

@@ -145,6 +145,8 @@ struct ViewerCommands: Commands {
         CommandMenu("View") {
             Button("Toggle Sidebar") { send(.mdvToggleSidebar) }
                 .keyboardShortcut("b")
+            Button("Contents") { send(.mdvToggleOutline) }
+                .keyboardShortcut("o", modifiers: [.command, .option])
             Toggle(
                 "Show All Files in Sidebar",
                 isOn: Binding(

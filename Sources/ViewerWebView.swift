@@ -19,6 +19,9 @@ extension Notification.Name {
     static let mdvDumpPage = Notification.Name("mdv.dumpPage")
     static let mdvToggleFrontmatter = Notification.Name("mdv.toggleFrontmatter")
     static let mdvCopyDocument = Notification.Name("mdv.copyDocument")
+    static let mdvToggleOutline = Notification.Name("mdv.toggleOutline")
+    /// Carries the heading index as its object.
+    static let mdvScrollToHeading = Notification.Name("mdv.scrollToHeading")
 }
 
 /// WKWebView that accepts dropped markdown files instead of letting WebKit
@@ -232,6 +235,16 @@ struct ViewerWebView: NSViewRepresentable {
                     )
                 }
                 doc.frontmatter = Frontmatter(fields: fields)
+            case "outline":
+                let headings = (body["headings"] as? [[String: Any]] ?? []).enumerated()
+                    .compactMap { index, entry -> Outline.Heading? in
+                        guard let title = entry["title"] as? String else { return nil }
+                        return Outline.Heading(
+                            level: entry["level"] as? Int ?? 2, title: title, index: index)
+                    }
+                doc.outline = Outline(headings: headings, current: doc.outline.current)
+            case "outlinePosition":
+                doc.outline.current = body["index"] as? Int ?? -1
             case "copyText":
                 if let text = body["text"] as? String {
                     NSPasteboard.general.clearContents()
@@ -245,6 +258,15 @@ struct ViewerWebView: NSViewRepresentable {
         // MARK: Menu commands
 
         func observeMenuCommands() {
+            NotificationCenter.default.addObserver(
+                forName: .mdvScrollToHeading, object: nil, queue: .main
+            ) { note in
+                guard let index = note.object as? NSNumber else { return }
+                Task { @MainActor in
+                    self.run("window.mdview.scrollToHeading(\(index.intValue))")
+                }
+            }
+
             let center = NotificationCenter.default
             let map: [(Notification.Name, () -> Void)] = [
                 (.mdvReload, { [weak self] in self?.doc.reload() }),

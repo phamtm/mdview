@@ -33,6 +33,8 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var recents: [URL] = []
     /// Parsed by the page and sent back, so there is only one parser.
     @Published var frontmatter = Frontmatter()
+    /// Read from the rendered document by the page; the contents panel shows it.
+    @Published var outline = Outline()
     /// Bumped on every content change so the web view knows to re-render.
     @Published private(set) var revision = 0
 
@@ -60,6 +62,7 @@ final class DocumentModel: ObservableObject {
         url = resolved
         canonicalPath = resolved.resolvingSymlinksInPath().path
         frontmatter = Frontmatter()
+        outline = Outline()
         load()
         if remember { self.remember(resolved) }
         // Watch after loading so an editor's atomic save can't slip past us.
