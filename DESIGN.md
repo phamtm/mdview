@@ -88,6 +88,8 @@ Three implementation notes that are easy to trip over:
   shows an unselected set.
 - **The frontmatter disclosure opens for any document**, saying when there is
   none, rather than being inert on documents without a block.
+- **No Parsed/Raw toggle.** The design offers a raw view of the block; the parsed
+  rows are what the panel is for, and the file itself is a keystroke away.
 
 ## Where things live
 
@@ -115,8 +117,7 @@ Split deliberately, so nothing appears twice:
 - **The document** carries `title` as its display head and `subtitle` as an italic
   line beneath it.
 - **The titlebar disclosure** (`⌘I`, or click the document's name) carries every
-  other field — rows with hairlines, list values as outlined pills, and a Raw view
-  of the block exactly as it appears in the file.
+  other field — rows with hairlines, list values as outlined pills.
 
 The page parses the block and posts the fields to Swift. Swift does not parse
 frontmatter at all: a second parser is a second thing to keep in step.

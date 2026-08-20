@@ -14,7 +14,6 @@ struct ViewerView: View {
     @AppStorage("size") private var sizeName = "regular"
     @State private var showSettings = false
     @State private var showFrontmatter = false
-    @State private var frontmatterRaw = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
@@ -34,7 +33,6 @@ struct ViewerView: View {
                 sidebarVisible: sidebarVisible,
                 frontmatter: doc.frontmatter,
                 showingFrontmatter: $showFrontmatter,
-                frontmatterRaw: $frontmatterRaw,
                 palette: palette,
                 toggleSidebar: toggleSidebar,
                 openSettings: { showSettings = true }
@@ -65,15 +63,11 @@ struct ViewerView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { showFrontmatter = false }
-                    FrontmatterPanel(
-                        frontmatter: doc.frontmatter,
-                        showingRaw: $frontmatterRaw,
-                        palette: palette
-                    )
-                    .padding(.top, ViewerView.titlebarHeight + 6)
-                    // The title is centred in the space right of the sidebar.
-                    .offset(x: (sidebarVisible ? storedWidth : 120) / 2)
-                    .onExitCommand { showFrontmatter = false }
+                    FrontmatterPanel(frontmatter: doc.frontmatter, palette: palette)
+                        .padding(.top, ViewerView.titlebarHeight + 6)
+                        // The title is centred in the space right of the sidebar.
+                        .offset(x: (sidebarVisible ? storedWidth : 120) / 2)
+                        .onExitCommand { showFrontmatter = false }
                 }
                 .transition(.opacity)
             }
@@ -188,7 +182,6 @@ struct TitleBar: View {
     let sidebarVisible: Bool
     let frontmatter: Frontmatter
     @Binding var showingFrontmatter: Bool
-    @Binding var frontmatterRaw: Bool
     let palette: Palette
     let toggleSidebar: () -> Void
     let openSettings: () -> Void

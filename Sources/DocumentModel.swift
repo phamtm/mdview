@@ -14,7 +14,6 @@ struct Frontmatter {
     }
 
     var fields: [Field] = []
-    var raw = ""
 
     var isEmpty: Bool { fields.isEmpty }
     /// Tag-like lists are shown as pills below the rows, per the design.

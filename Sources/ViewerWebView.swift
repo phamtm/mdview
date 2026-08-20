@@ -213,7 +213,7 @@ struct ViewerWebView: NSViewRepresentable {
                         isList: entry["isList"] as? Bool ?? false
                     )
                 }
-                doc.frontmatter = Frontmatter(fields: fields, raw: body["raw"] as? String ?? "")
+                doc.frontmatter = Frontmatter(fields: fields)
             case "copyText":
                 if let text = body["text"] as? String {
                     NSPasteboard.general.clearContents()

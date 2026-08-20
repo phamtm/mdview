@@ -2,11 +2,9 @@ import SwiftUI
 
 /// The frontmatter disclosure that hangs under the document's name in the
 /// titlebar: a 344pt card with a gold rule under its header, the fields as a
-/// label/value grid, list values as outlined pills, and a raw view of the block
-/// as it appears in the file.
+/// label/value grid, and list values as outlined pills.
 struct FrontmatterPanel: View {
     let frontmatter: Frontmatter
-    @Binding var showingRaw: Bool
     let palette: Palette
 
     private static let space2: CGFloat = 9.2
@@ -17,13 +15,7 @@ struct FrontmatterPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if frontmatter.isEmpty {
-                emptyState
-            } else if showingRaw {
-                rawView
-            } else {
-                parsedView
-            }
+            if frontmatter.isEmpty { emptyState } else { parsedView }
         }
         .padding(Self.space4)
         .frame(width: 344)
@@ -52,40 +44,12 @@ struct FrontmatterPanel: View {
                 .tracking(1.8)
                 .textCase(.uppercase)
                 .foregroundStyle(palette.accentText)
-            Spacer(minLength: 0)
-            if !frontmatter.isEmpty { viewToggle }
         }
         .padding(.bottom, Self.space2)
         .overlay(alignment: .bottom) {
             Rectangle().fill(palette.accent).frame(height: 1)
         }
         .padding(.bottom, Self.space3)
-    }
-
-    private var viewToggle: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(["Parsed", "Raw"].enumerated()), id: \.element) { index, name in
-                let selected = (name == "Raw") == showingRaw
-                Text(name)
-                    .font(Typeface.display(11))
-                    .foregroundStyle(selected ? palette.text : palette.muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .background(palette.accent.opacity(selected ? 0.16 : 0))
-                    .overlay(alignment: .leading) {
-                        if index > 0 {
-                            Rectangle().fill(palette.divider).frame(width: 1)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { showingRaw = (name == "Raw") }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(palette.divider, lineWidth: 1)
-        )
     }
 
     private var parsedView: some View {
@@ -138,27 +102,6 @@ struct FrontmatterPanel: View {
         .padding(.top, Self.space3)
     }
 
-    /// The block exactly as it appears in the file, fences included.
-    private var rawView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Text(frontmatter.raw)
-                .font(.system(size: 11.5, design: .monospaced))
-                .foregroundStyle(palette.text.opacity(0.85))
-                .lineSpacing(3)
-                .textSelection(.enabled)
-                .padding(.horizontal, Self.space3)
-                .padding(.vertical, Self.space2)
-        }
-        .background(palette.surface)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0, bottomLeadingRadius: 0,
-                bottomTrailingRadius: 4, topTrailingRadius: 4, style: .continuous)
-        )
-        .overlay(alignment: .leading) {
-            Rectangle().fill(palette.accent).frame(width: 2)
-        }
-    }
 }
 
 /// Wraps its children onto as many lines as they need. SwiftUI has no flow

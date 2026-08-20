@@ -92,12 +92,8 @@ import { createRail } from "./rail.js";
   /** Split a leading `---` (YAML) or `+++` (TOML) block off the document. */
   function splitFrontmatter(text) {
     const match = /^\uFEFF?(---|\+\+\+)[ \t]*\r?\n([\s\S]*?)\r?\n?\1[ \t]*(?:\r?\n|$)/.exec(text);
-    if (!match) return { fields: [], body: text, raw: "" };
-    return {
-      fields: parseFields(match[2]),
-      body: text.slice(match[0].length),
-      raw: match[0].trimEnd(),
-    };
+    if (!match) return { fields: [], body: text };
+    return { fields: parseFields(match[2]), body: text.slice(match[0].length) };
   }
 
   function unquote(value) {
@@ -574,7 +570,6 @@ import { createRail } from "./rail.js";
     // duplicating it there would be two implementations to keep in step.
     post({
       action: "frontmatter",
-      raw: split.raw,
       // Title and subtitle are already on the page as the document's own head.
       fields: split.fields
         .filter(([name]) => !DOCUMENT_FIELDS.includes(name.toLowerCase()))
