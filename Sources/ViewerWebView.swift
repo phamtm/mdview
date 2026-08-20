@@ -18,6 +18,7 @@ extension Notification.Name {
     /// Asks the page to report what it actually rendered; see tools/check-theme.sh.
     static let mdvDumpPage = Notification.Name("mdv.dumpPage")
     static let mdvToggleFrontmatter = Notification.Name("mdv.toggleFrontmatter")
+    static let mdvCopyDocument = Notification.Name("mdv.copyDocument")
 }
 
 /// WKWebView that accepts dropped markdown files instead of letting WebKit
@@ -77,8 +78,18 @@ enum Viewer {
         "md", "markdown", "mdown", "mkd", "mdx", "markdn", "txt", "text", "rmd", "qmd",
     ]
 
+    /// Markdown proper, as opposed to the plain-text files we will also open.
+    static let markdownExtensions: Set<String> = [
+        "md", "markdown", "mdown", "mkd", "mdx", "markdn", "rmd", "qmd",
+    ]
+
     static func isTextLike(_ url: URL) -> Bool {
         textExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func isMarkdown(_ url: URL?) -> Bool {
+        guard let url else { return false }
+        return markdownExtensions.contains(url.pathExtension.lowercased())
     }
 }
 
@@ -243,6 +254,7 @@ struct ViewerWebView: NSViewRepresentable {
                 (.mdvFind, { [weak self] in self?.run("window.mdview.openFind()") }),
                 (.mdvPrint, { [weak self] in self?.printPage() }),
                 (.mdvCopyPath, { [weak self] in self?.copyPath() }),
+                (.mdvCopyDocument, { [weak self] in self?.copyDocument() }),
                 (.mdvReloadPage, { [weak self] in self?.webView?.reloadFromOrigin() }),
                 (.mdvDumpPage, { [weak self] in self?.dumpPage() }),
                 (.mdvSettingsChanged, { [weak self] in self?.rerender() }),
@@ -307,6 +319,13 @@ struct ViewerWebView: NSViewRepresentable {
             operation.runModal(
                 for: webView.window ?? NSWindow(),
                 delegate: nil, didRun: nil, contextInfo: nil)
+        }
+
+        /// The file's own markdown, not the rendered text.
+        private func copyDocument() {
+            guard Viewer.isMarkdown(doc.url), !doc.markdown.isEmpty else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(doc.markdown, forType: .string)
         }
 
         private func copyPath() {

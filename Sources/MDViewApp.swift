@@ -120,6 +120,9 @@ struct ViewerCommands: Commands {
             Button("Reveal in Finder") { doc.revealInFinder() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(doc.url == nil)
+            Button("Copy Document") { send(.mdvCopyDocument) }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(!Viewer.isMarkdown(doc.url))
             Button("Copy File Path") { send(.mdvCopyPath) }
                 .disabled(doc.url == nil)
             Divider()

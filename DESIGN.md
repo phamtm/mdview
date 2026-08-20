@@ -119,6 +119,13 @@ Three implementation notes that are easy to trip over:
 - **Test every theme.** The bug above passed a suite that only rendered the
   default one. `tools/run-tests.sh` now renders all three.
 
+## The titlebar's right side
+
+Copy, then settings. Copy puts the document's **markdown source** on the clipboard,
+not the rendered text, and appears only for markdown files — the app opens plain
+text too, where "copy the markdown" means nothing. `⌥⌘C` does the same, and the
+icon becomes a tick for a moment so the click is acknowledged.
+
 ## Deliberate departures from the spec
 
 - **No hover tint on the document's name.** The design tints it with 10% accent;

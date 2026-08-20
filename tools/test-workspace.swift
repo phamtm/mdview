@@ -32,6 +32,14 @@ MainActor.assumeIsolated {
     }
 
     let workspace = WorkspaceModel.shared
+    // Copying the source is offered for markdown, not for every readable file.
+    check("md is markdown", Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.md")))
+    check("markdown is markdown", Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.markdown")))
+    check("mdx is markdown", Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.mdx")))
+    check("txt is not markdown", !Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.txt")))
+    check("png is not markdown", !Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.png")))
+    check("nothing open is not markdown", !Viewer.isMarkdown(nil))
+
     workspace.roots.forEach { workspace.remove($0) }
     workspace.showAllFiles = false
     workspace.add(root)

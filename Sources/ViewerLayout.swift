@@ -40,6 +40,7 @@ struct ViewerView: View {
                 meta: documentMeta,
                 sidebarWidth: sidebarVisible ? storedWidth : ViewerView.collapsedZone,
                 sidebarVisible: sidebarVisible,
+                canCopy: Viewer.isMarkdown(doc.url),
                 frontmatter: doc.frontmatter,
                 showingFrontmatter: $showFrontmatter,
                 palette: palette,
@@ -191,6 +192,7 @@ struct TitleBar: View {
     let meta: String
     let sidebarWidth: CGFloat
     let sidebarVisible: Bool
+    let canCopy: Bool
     let frontmatter: Frontmatter
     @Binding var showingFrontmatter: Bool
     let palette: Palette
@@ -201,6 +203,9 @@ struct TitleBar: View {
         HStack(spacing: 0) {
             leftZone
             documentLabel
+            if canCopy {
+                CopyButton(palette: palette)
+            }
             IconButton(symbol: "gearshape", palette: palette, action: openSettings)
                 .help("Settings (⌘,)")
                 .padding(.trailing, 13.8)
@@ -270,6 +275,24 @@ struct TitleBar: View {
             showingFrontmatter.toggle()
         }
         .help(hasDocument ? "Front matter (⌘I)" : "")
+    }
+}
+
+/// Copies the document's markdown, and says so for a moment afterwards.
+struct CopyButton: View {
+    let palette: Palette
+    @State private var copied = false
+
+    var body: some View {
+        IconButton(symbol: copied ? "checkmark" : "doc.on.doc", palette: palette) {
+            NotificationCenter.default.post(name: .mdvCopyDocument, object: nil)
+            copied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_400_000_000)
+                copied = false
+            }
+        }
+        .help(copied ? "Copied" : "Copy document (⌥⌘C)")
     }
 }
 
