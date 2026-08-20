@@ -88,9 +88,19 @@ export function createRail() {
     const snippet = element("div", "rail-card-snippet");
     snippet.textContent = heading.snippet;
     card.append(title, snippet);
-    const mark = ticks.children[index];
-    card.style.top = `${mark.offsetTop + mark.offsetHeight / 2}px`;
     card.hidden = false;
+
+    // Position against the zone, which is what the card is absolute to.
+    // offsetTop would be relative to the ticks container instead, which is
+    // itself centred in the zone — that put the card up at the window's top.
+    const mark = ticks.children[index];
+    const zoneBox = zone.getBoundingClientRect();
+    const markBox = mark.getBoundingClientRect();
+    const centre = markBox.top + markBox.height / 2 - zoneBox.top;
+    // Keep it on screen for headings near either end.
+    const half = card.offsetHeight / 2;
+    const lowest = zoneBox.height - half - 12;
+    card.style.top = `${Math.min(Math.max(centre, half + 12), Math.max(lowest, half + 12))}px`;
   }
 
   function hideCard() {

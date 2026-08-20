@@ -59,6 +59,25 @@ MDVIEW_THEME=vellum ./build/snapshot Resources sample.md build/shot-vellum light
 python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
   build/diag-night.txt build/diag-vellum.txt
 
+echo "==> contents rail preview sits beside its tick"
+MDVIEW_RAIL=hover MDVIEW_THEME=paper ./build/snapshot Resources sample.md build/shot-hover light \
+  >build/diag-hover.txt
+python3 - <<'CHECK'
+import json
+raw = open("build/diag-hover.txt").read()
+data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
+card, tick = data["railCardCentre"], data["railTickCentre"]
+if card < 0:
+    print("  FAIL hover preview did not appear")
+    raise SystemExit(1)
+# It is positioned against the rail zone; using offsetTop instead once put it up
+# at the top of the window, far from the tick it describes.
+if abs(card - tick) > 6:
+    print(f"  FAIL preview centre {card} is not beside its tick {tick}")
+    raise SystemExit(1)
+print(f"  ok   preview centred on its tick ({card} vs {tick})")
+CHECK
+
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
 ./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
 python3 - <<'CHECK'

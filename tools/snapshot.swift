@@ -91,6 +91,19 @@ final class Runner: NSObject, WKNavigationDelegate {
               railTicks: document.querySelectorAll('.rail-ticks .rail-tick').length,
               railRows: document.querySelectorAll('.rail-panel .rail-row').length,
               railHidden: !!document.querySelector('.rail-zone').hidden,
+              railCardCentre: (function () {
+                var c = document.querySelector('.rail-card');
+                if (!c || c.hidden) return -1;
+                var b = c.getBoundingClientRect();
+                return Math.round(b.top + b.height / 2);
+              })(),
+              railTickCentre: (function () {
+                var ticks = document.querySelectorAll('.rail-ticks .rail-tick');
+                var t = ticks[Math.min(3, ticks.length - 1)];
+                if (!t) return -1;
+                var b = t.getBoundingClientRect();
+                return Math.round(b.top + b.height / 2);
+              })(),
               frontmatterTitle: (document.querySelector('#doc .fm-title') || {}).textContent || 'none',
               frontmatterFields: document.querySelectorAll('#doc .fm-fields dt').length,
               frontmatterSubtitle: (document.querySelector('#doc .fm-subtitle') || {}).textContent || 'none',
