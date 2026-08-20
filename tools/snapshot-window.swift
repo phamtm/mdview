@@ -34,6 +34,10 @@ struct TrafficLights: View {
 
 MainActor.assumeIsolated {
     Typeface.register()
+    // Set MDVIEW_SIDEBAR_CLOSED=1 to capture the collapsed left zone.
+    if ProcessInfo.processInfo.environment["MDVIEW_SIDEBAR_CLOSED"] == "1" {
+        UserDefaults.standard.set(false, forKey: "sidebarVisible")
+    }
     let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(
         "mdview-window-demo")
     try? FileManager.default.removeItem(at: base)

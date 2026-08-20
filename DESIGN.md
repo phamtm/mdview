@@ -48,6 +48,7 @@ System" picks Paper or Colophon by appearance.
 | --- | --- |
 | Titlebar band | 52pt, surface-coloured, hairline beneath |
 | Band split | hairline at the sidebar's edge; traffic lights and the sidebar toggle sit left of it |
+| Left zone, sidebar closed | 136.4pt = buttons (69) + `--space-6` + toggle (26) + inset (13.8) |
 | Sidebar | 258pt default (drag 170–460), surface 62% over bg, hairline right edge |
 | Sidebar row | 27pt, 16pt indent per level, 4pt radius |
 | Document column | 700pt measure at 17px (640/15 small, 760/19 large) |
@@ -68,7 +69,9 @@ that puts the buttons at 26, exactly half the band, and they sit centred. Nothin
 is ever placed in that toolbar. Change the band height and the buttons stop being
 centred — `tools/check-window-chrome.sh` asserts `buttonCentre=26` to catch it.
 
-Horizontally they span x=9…69, which is what the left zone reserves.
+Horizontally they span x=9…69, which is what the left zone reserves. With the
+sidebar closed that zone is sized from the scale rather than left to whatever a
+spacer had spare — which was 11pt, and read as the toggle touching the buttons.
 
 ## How the two halves stay in step
 

@@ -21,6 +21,10 @@ struct ViewerView: View {
     // by a hairline at the sidebar's edge. The traffic lights (14pt, x=9…69 on
     // macOS 26) sit in the left half of that band.
     static let trafficLightSpan: CGFloat = 69
+    /// Width of the left zone with the sidebar closed: the buttons, a full
+    /// `--space-6` of air, then the toggle and its trailing inset. Sized rather
+    /// than left to whatever a Spacer had spare, which was 11pt.
+    static let collapsedZone: CGFloat = 69 + 27.6 + 26 + 13.8
     /// 52 so the traffic lights land in its centre: with an empty unified
     /// toolbar attached, macOS centres them 26pt from the top. Measured, not
     /// guessed — see DESIGN.md.
@@ -32,7 +36,7 @@ struct ViewerView: View {
             TitleBar(
                 name: doc.url?.lastPathComponent,
                 meta: documentMeta,
-                sidebarWidth: sidebarVisible ? storedWidth : 120,
+                sidebarWidth: sidebarVisible ? storedWidth : ViewerView.collapsedZone,
                 sidebarVisible: sidebarVisible,
                 frontmatter: doc.frontmatter,
                 showingFrontmatter: $showFrontmatter,
@@ -69,7 +73,7 @@ struct ViewerView: View {
                     FrontmatterPanel(frontmatter: doc.frontmatter, palette: palette)
                         .padding(.top, ViewerView.titlebarHeight + 6)
                         // The title is centred in the space right of the sidebar.
-                        .offset(x: (sidebarVisible ? storedWidth : 120) / 2)
+                        .offset(x: (sidebarVisible ? storedWidth : ViewerView.collapsedZone) / 2)
                         .onExitCommand { showFrontmatter = false }
                 }
                 .transition(.opacity)
@@ -216,7 +220,7 @@ struct TitleBar: View {
                 .help("Toggle sidebar (⌘B)")
                 .padding(.trailing, 13.8)
         }
-        .frame(width: max(sidebarWidth, 120))
+        .frame(width: max(sidebarWidth, ViewerView.collapsedZone))
         .overlay(alignment: .trailing) {
             Rectangle().fill(palette.divider).frame(width: 1)
         }
