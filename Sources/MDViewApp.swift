@@ -43,7 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // document list, so it skips the restore below and exits.
         if ProcessInfo.processInfo.environment["MDVIEW_WINDOW_DUMP"] == "1" {
             Task { @MainActor in
+                // Optionally render a document, so page state can be checked too.
+                if let path = ProcessInfo.processInfo.environment["MDVIEW_DUMP_DOC"] {
+                    DocumentModel.shared.open(URL(fileURLWithPath: path), remember: false)
+                }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
+                NotificationCenter.default.post(name: .mdvDumpPage, object: nil)
+                try? await Task.sleep(nanoseconds: 700_000_000)
                 print("WINDOW \(WindowStyler.shared.describe())")
                 exit(0)
             }

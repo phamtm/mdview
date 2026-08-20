@@ -46,19 +46,18 @@ final class Runner: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        let payload: [String: Any] = [
-            "markdown": markdown,
-            "path": mdURL.path,
-            "dir": mdURL.deletingLastPathComponent().path,
-            "name": mdURL.lastPathComponent,
-            "error": "",
-            "showFrontmatter": showFrontmatter,
-            "theme": ProcessInfo.processInfo.environment["MDVIEW_THEME"] ?? "paper",
-            "size": "regular",
-        ]
-        let json = String(
-            data: try! JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
-        webView.evaluateJavaScript("window.mdview.render(\(json)); 'ok'") { _, error in
+        let payload = RenderPayload(
+            markdown: markdown,
+            path: mdURL.path,
+            dir: mdURL.deletingLastPathComponent().path,
+            name: mdURL.lastPathComponent,
+            error: "",
+            showFrontmatter: showFrontmatter,
+            theme: ProcessInfo.processInfo.environment["MDVIEW_THEME"] ?? "paper",
+            size: "regular"
+        )
+        guard let call = payload.renderCall else { print("payload encode failed"); return }
+        webView.evaluateJavaScript(call + " 'ok'") { _, error in
             if let error { print("render error: \(error)") }
             // Give lazily-loaded mermaid time to draw.
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.diagnose() }
@@ -88,6 +87,7 @@ final class Runner: NSObject, WKNavigationDelegate {
               onerrorAttrs: document.querySelectorAll('#doc [onerror]').length,
               pwned: !!window.__pwned,
               bodyHeight: document.body.scrollHeight,
+              appliedTheme: document.documentElement.dataset.theme || 'system',
               frontmatterTitle: (document.querySelector('#doc .fm-title') || {}).textContent || 'none',
               frontmatterFields: document.querySelectorAll('#doc .fm-fields dt').length,
               frontmatterPills: document.querySelectorAll('#doc .fm-pill').length,

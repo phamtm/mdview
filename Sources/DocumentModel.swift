@@ -35,12 +35,13 @@ final class DocumentModel: ObservableObject {
         return URL(fileURLWithPath: path)
     }
 
-    func open(_ target: URL) {
+    /// `remember: false` keeps a diagnostic run out of the recents list.
+    func open(_ target: URL, remember: Bool = true) {
         let resolved = target.standardizedFileURL
         url = resolved
         canonicalPath = resolved.resolvingSymlinksInPath().path
         load()
-        remember(resolved)
+        if remember { self.remember(resolved) }
         // Watch after loading so an editor's atomic save can't slip past us.
         watcher = FileWatcher(url: resolved) { [weak self] in
             Task { @MainActor in self?.load() }

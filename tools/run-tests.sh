@@ -14,6 +14,9 @@ echo "==> web bundle"
 ./build.sh >/dev/null
 echo "  ok   bundle built from web/src"
 
+echo "==> payload contract"
+./tools/check-payload.sh
+
 echo "==> file watcher"
 # swiftc only allows top-level code in a file called main.swift
 cp tools/test-watcher.swift build/main.swift
@@ -30,6 +33,9 @@ echo "==> window chrome (real app)"
 ./build.sh >/dev/null
 ./tools/check-window-chrome.sh
 
+echo "==> theme reaches the document (real app)"
+./tools/check-theme.sh
+
 echo "==> window layout"
 mkdir -p build/window-tool
 cp tools/snapshot-window.swift build/window-tool/main.swift
@@ -41,17 +47,20 @@ echo "==> renderer"
 # Every theme, not just the default: the Vellum and Colophon palettes are built
 # from color-mix(), and a token that resolves to a syntax mermaid cannot parse
 # breaks diagrams in that theme alone.
-swift tools/snapshot.swift Resources sample.md build/shot light >build/diag-light.txt
-swift tools/snapshot.swift Resources sample.md build/shot dark  >build/diag-dark.txt
-MDVIEW_THEME=night swift tools/snapshot.swift Resources sample.md build/shot-night dark \
+mkdir -p build/render-tool
+cp tools/snapshot.swift build/render-tool/main.swift
+swiftc -O -o build/snapshot $SRC build/render-tool/main.swift
+./build/snapshot Resources sample.md build/shot light >build/diag-light.txt
+./build/snapshot Resources sample.md build/shot dark  >build/diag-dark.txt
+MDVIEW_THEME=night ./build/snapshot Resources sample.md build/shot-night dark \
   >build/diag-night.txt
-MDVIEW_THEME=vellum swift tools/snapshot.swift Resources sample.md build/shot-vellum light \
+MDVIEW_THEME=vellum ./build/snapshot Resources sample.md build/shot-vellum light \
   >build/diag-vellum.txt
 python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
   build/diag-night.txt build/diag-vellum.txt
 
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
-swift tools/snapshot.swift Resources sample.md build/nofm light nofm >build/diag-nofm.txt
+./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
 python3 - <<'CHECK'
 import json
 raw = open("build/diag-nofm.txt").read()
@@ -68,7 +77,7 @@ CHECK
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist
 # named after each executable. cfprefsd owns those files and rewrites them after a
 # process exits, so ask the daemon to drop the domains rather than deleting files.
-for domain in test-workspace snapshot-window; do
+for domain in test-workspace snapshot-window snapshot; do
   defaults delete "$domain" >/dev/null 2>&1 || true
   rm -f "$HOME/Library/Preferences/$domain.plist"
 done

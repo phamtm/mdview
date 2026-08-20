@@ -55,6 +55,11 @@ for path in sys.argv[1:]:
     if "file://" not in str(data.get("mdLinkHref", "")):
         print(f"  FAIL {path}: local md link not resolved: {data.get('mdLinkHref')}")
         failed = True
+    expected_theme = "night" if "night" in path else ("vellum" if "vellum" in path else "paper")
+    if data.get("appliedTheme") != expected_theme:
+        print(f"  FAIL {path}: theme not applied — asked {expected_theme}, "
+              f"page has {data.get('appliedTheme')!r}")
+        failed = True
     if data.get("frontmatterTitle") != "MDView":
         print(f"  FAIL {path}: frontmatter title = {data.get('frontmatterTitle')!r}")
         failed = True

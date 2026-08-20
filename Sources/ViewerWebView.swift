@@ -15,6 +15,8 @@ extension Notification.Name {
     static let mdvToggleSidebar = Notification.Name("mdv.toggleSidebar")
     static let mdvReloadPage = Notification.Name("mdv.reloadPage")
     static let mdvOpenSettings = Notification.Name("mdv.openSettings")
+    /// Asks the page to report what it actually rendered; see tools/check-theme.sh.
+    static let mdvDumpPage = Notification.Name("mdv.dumpPage")
 }
 
 /// WKWebView that accepts dropped markdown files instead of letting WebKit
@@ -134,20 +136,19 @@ struct ViewerWebView: NSViewRepresentable {
         func renderIfNeeded() {
             guard pageReady, let webView, renderedRevision != doc.revision else { return }
             renderedRevision = doc.revision
-            let payload: [String: Any] = [
-                "markdown": doc.markdown,
-                "path": doc.url?.path ?? "",
-                "dir": doc.url?.deletingLastPathComponent().path ?? "",
-                "name": doc.url?.lastPathComponent ?? "",
-                "error": doc.loadError ?? "",
-                // Explicit default: this must not depend on registration order.
-                "showFrontmatter": UserDefaults.standard.object(forKey: "showFrontmatter") as? Bool
-                    ?? true,
-            ]
-            guard let json = try? JSONSerialization.data(withJSONObject: payload),
-                let literal = String(data: json, encoding: .utf8)
-            else { return }
-            webView.evaluateJavaScript("window.mdview.render(\(literal));")
+            let settings = RenderPayload.settings()
+            let payload = RenderPayload(
+                markdown: doc.markdown,
+                path: doc.url?.path ?? "",
+                dir: doc.url?.deletingLastPathComponent().path ?? "",
+                name: doc.url?.lastPathComponent ?? "",
+                error: doc.loadError ?? "",
+                showFrontmatter: settings.showFrontmatter,
+                theme: settings.theme,
+                size: settings.size
+            )
+            guard let call = payload.renderCall else { return }
+            webView.evaluateJavaScript(call)
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -224,6 +225,7 @@ struct ViewerWebView: NSViewRepresentable {
                 (.mdvPrint, { [weak self] in self?.printPage() }),
                 (.mdvCopyPath, { [weak self] in self?.copyPath() }),
                 (.mdvReloadPage, { [weak self] in self?.webView?.reloadFromOrigin() }),
+                (.mdvDumpPage, { [weak self] in self?.dumpPage() }),
                 (.mdvSettingsChanged, { [weak self] in self?.rerender() }),
             ]
             for (name, handler) in map {
@@ -234,6 +236,22 @@ struct ViewerWebView: NSViewRepresentable {
         }
 
         private func run(_ js: String) { webView?.evaluateJavaScript(js) }
+
+        /// Reports what the page actually rendered, so a test can check the real
+        /// app rather than a harness that builds its own payload.
+        private func dumpPage() {
+            let probe =
+                "JSON.stringify({theme: document.documentElement.dataset.theme || 'system', "
+                + "size: document.documentElement.dataset.size || 'regular', "
+                + "headings: document.querySelectorAll('#doc h1, #doc h2').length})"
+            webView?.evaluateJavaScript(probe) { value, error in
+                if let error {
+                    print("PAGE error=\(error)")
+                } else {
+                    print("PAGE \((value as? String) ?? "no value")")
+                }
+            }
+        }
 
         /// Re-render the document unchanged, after a display setting changed.
         private func rerender() {
