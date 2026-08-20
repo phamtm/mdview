@@ -1,16 +1,16 @@
 import SwiftUI
-import WebKit
 import UniformTypeIdentifiers
+import WebKit
 
 /// Actions the menu bar sends to the web view.
 extension Notification.Name {
-    static let mdvReload    = Notification.Name("mdv.reload")
-    static let mdvZoomIn    = Notification.Name("mdv.zoomIn")
-    static let mdvZoomOut   = Notification.Name("mdv.zoomOut")
+    static let mdvReload = Notification.Name("mdv.reload")
+    static let mdvZoomIn = Notification.Name("mdv.zoomIn")
+    static let mdvZoomOut = Notification.Name("mdv.zoomOut")
     static let mdvZoomReset = Notification.Name("mdv.zoomReset")
-    static let mdvFind      = Notification.Name("mdv.find")
-    static let mdvPrint     = Notification.Name("mdv.print")
-    static let mdvCopyPath  = Notification.Name("mdv.copyPath")
+    static let mdvFind = Notification.Name("mdv.find")
+    static let mdvPrint = Notification.Name("mdv.print")
+    static let mdvCopyPath = Notification.Name("mdv.copyPath")
     static let mdvToggleFont = Notification.Name("mdv.toggleFont")
     static let mdvSettingsChanged = Notification.Name("mdv.settingsChanged")
     static let mdvToggleSidebar = Notification.Name("mdv.toggleSidebar")
@@ -141,10 +141,12 @@ struct ViewerWebView: NSViewRepresentable {
                 "name": doc.url?.lastPathComponent ?? "",
                 "error": doc.loadError ?? "",
                 // Explicit default: this must not depend on registration order.
-                "showFrontmatter": UserDefaults.standard.object(forKey: "showFrontmatter") as? Bool ?? true,
+                "showFrontmatter": UserDefaults.standard.object(forKey: "showFrontmatter") as? Bool
+                    ?? true,
             ]
             guard let json = try? JSONSerialization.data(withJSONObject: payload),
-                  let literal = String(data: json, encoding: .utf8) else { return }
+                let literal = String(data: json, encoding: .utf8)
+            else { return }
             webView.evaluateJavaScript("window.mdview.render(\(literal));")
         }
 
@@ -157,9 +159,11 @@ struct ViewerWebView: NSViewRepresentable {
 
         // MARK: Links
 
-        func webView(_ webView: WKWebView,
-                     decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor action: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
             guard let url = action.request.url else {
                 decisionHandler(.allow)
                 return
@@ -179,7 +183,7 @@ struct ViewerWebView: NSViewRepresentable {
             decisionHandler(.cancel)
             guard action.navigationType == .linkActivated else { return }
             if url.isFileURL, Viewer.isTextLike(url) {
-                doc.open(url)          // follow links between local markdown files
+                doc.open(url)  // follow links between local markdown files
             } else {
                 NSWorkspace.shared.open(url)
             }
@@ -187,10 +191,13 @@ struct ViewerWebView: NSViewRepresentable {
 
         // MARK: Messages from the page
 
-        func userContentController(_ controller: WKUserContentController,
-                                   didReceive message: WKScriptMessage) {
+        func userContentController(
+            _ controller: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
             guard let body = message.body as? [String: Any],
-                  let action = body["action"] as? String else { return }
+                let action = body["action"] as? String
+            else { return }
             switch action {
             case "openPanel":
                 doc.openPanel()
@@ -209,13 +216,13 @@ struct ViewerWebView: NSViewRepresentable {
         func observeMenuCommands() {
             let center = NotificationCenter.default
             let map: [(Notification.Name, () -> Void)] = [
-                (.mdvReload,    { [weak self] in self?.doc.reload() }),
-                (.mdvZoomIn,    { [weak self] in self?.setZoom(delta: 0.1) }),
-                (.mdvZoomOut,   { [weak self] in self?.setZoom(delta: -0.1) }),
+                (.mdvReload, { [weak self] in self?.doc.reload() }),
+                (.mdvZoomIn, { [weak self] in self?.setZoom(delta: 0.1) }),
+                (.mdvZoomOut, { [weak self] in self?.setZoom(delta: -0.1) }),
                 (.mdvZoomReset, { [weak self] in self?.resetZoom() }),
-                (.mdvFind,      { [weak self] in self?.run("window.mdview.openFind()") }),
-                (.mdvPrint,     { [weak self] in self?.printPage() }),
-                (.mdvCopyPath,  { [weak self] in self?.copyPath() }),
+                (.mdvFind, { [weak self] in self?.run("window.mdview.openFind()") }),
+                (.mdvPrint, { [weak self] in self?.printPage() }),
+                (.mdvCopyPath, { [weak self] in self?.copyPath() }),
                 (.mdvToggleFont, { [weak self] in self?.run("window.mdview.toggleFont()") }),
                 (.mdvReloadPage, { [weak self] in self?.webView?.reloadFromOrigin() }),
                 (.mdvSettingsChanged, { [weak self] in self?.rerender() }),
@@ -254,8 +261,9 @@ struct ViewerWebView: NSViewRepresentable {
             info.verticalPagination = .automatic
             let operation = webView.printOperation(with: info)
             operation.view?.frame = webView.bounds
-            operation.runModal(for: webView.window ?? NSWindow(),
-                               delegate: nil, didRun: nil, contextInfo: nil)
+            operation.runModal(
+                for: webView.window ?? NSWindow(),
+                delegate: nil, didRun: nil, contextInfo: nil)
         }
 
         private func copyPath() {

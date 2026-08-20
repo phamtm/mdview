@@ -17,9 +17,13 @@ app.appearance = NSAppearance(named: mode == "dark" ? .darkAqua : .aqua)
 struct TrafficLights: View {
     var body: some View {
         HStack(spacing: 9) {
-            ForEach([Color(red: 1, green: 0.37, blue: 0.34),
-                     Color(red: 1, green: 0.74, blue: 0.18),
-                     Color(red: 0.15, green: 0.78, blue: 0.25)], id: \.self) { colour in
+            ForEach(
+                [
+                    Color(red: 1, green: 0.37, blue: 0.34),
+                    Color(red: 1, green: 0.74, blue: 0.18),
+                    Color(red: 0.15, green: 0.78, blue: 0.25),
+                ], id: \.self
+            ) { colour in
                 Circle().fill(colour).frame(width: 14, height: 14)
             }
         }
@@ -29,15 +33,18 @@ struct TrafficLights: View {
 }
 
 MainActor.assumeIsolated {
-    let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("mdview-window-demo")
+    let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(
+        "mdview-window-demo")
     try? FileManager.default.removeItem(at: base)
     let notes = base.appendingPathComponent("notes")
     let docs = notes.appendingPathComponent("docs")
     try! FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
     for name in ["ideas.md", "journal.md"] {
-        try! "# \(name)\n".write(to: notes.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        try! "# \(name)\n".write(
+            to: notes.appendingPathComponent(name), atomically: true, encoding: .utf8)
     }
-    try! "# api.md\n".write(to: docs.appendingPathComponent("api.md"), atomically: true, encoding: .utf8)
+    try! "# api.md\n".write(
+        to: docs.appendingPathComponent("api.md"), atomically: true, encoding: .utf8)
 
     let readme = notes.appendingPathComponent("onboarding.md")
     try! """
@@ -73,8 +80,9 @@ MainActor.assumeIsolated {
     let reference = base.appendingPathComponent("reference")
     try! FileManager.default.createDirectory(at: reference, withIntermediateDirectories: true)
     for name in ["style-guide.md", "glossary.md"] {
-        try! "# \(name)\n".write(to: reference.appendingPathComponent(name),
-                                  atomically: true, encoding: .utf8)
+        try! "# \(name)\n".write(
+            to: reference.appendingPathComponent(name),
+            atomically: true, encoding: .utf8)
     }
     workspace.add(notes)
     workspace.add(reference)
@@ -91,8 +99,9 @@ MainActor.assumeIsolated {
     // the sidebar's scroll subtree and it captures as empty black. This harness
     // is for layout and styling; the real window's titlebar state is checked by
     // tools/check-window-chrome.sh, which asks the running app directly.
-    let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless],
-                          backing: .buffered, defer: false)
+    let window = NSWindow(
+        contentRect: hosting.frame, styleMask: [.borderless],
+        backing: .buffered, defer: false)
     window.appearance = NSApp.appearance
     window.contentView = hosting
     window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
@@ -111,8 +120,9 @@ MainActor.assumeIsolated {
 
     func write(_ image: NSImage) {
         guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return }
+            let rep = NSBitmapImageRep(data: tiff),
+            let png = rep.representation(using: .png, properties: [:])
+        else { return }
         try? png.write(to: URL(fileURLWithPath: out))
         print("wrote \(out) (\(mode))")
     }
@@ -120,7 +130,9 @@ MainActor.assumeIsolated {
     DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
         hosting.layoutSubtreeIfNeeded()
         let frameView = hosting
-        print("sidebar rows: \(WorkspaceModel.shared.rows.count), roots: \(WorkspaceModel.shared.roots.map(\.name))")
+        print(
+            "sidebar rows: \(WorkspaceModel.shared.rows.count), roots: \(WorkspaceModel.shared.roots.map(\.name))"
+        )
         guard let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else {
             print("no bitmap"); app.terminate(nil); return
         }
@@ -136,10 +148,11 @@ MainActor.assumeIsolated {
         }
         // hosting is flipped (top-left origin), NSImage drawing is not.
         let inHosting = web.convert(web.bounds, to: frameView)
-        let target = NSRect(x: inHosting.minX,
-                            y: frameView.bounds.height - inHosting.maxY,
-                            width: inHosting.width,
-                            height: inHosting.height)
+        let target = NSRect(
+            x: inHosting.minX,
+            y: frameView.bounds.height - inHosting.maxY,
+            width: inHosting.width,
+            height: inHosting.height)
         let config = WKSnapshotConfiguration()
         config.rect = web.bounds
         config.snapshotWidth = NSNumber(value: Double(web.bounds.width))

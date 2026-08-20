@@ -11,14 +11,20 @@ enum Variant: String {
     var background: [NSColor] {
         switch self {
         case .ink:
-            return [NSColor(srgbRed: 0.20, green: 0.21, blue: 0.25, alpha: 1),
-                    NSColor(srgbRed: 0.08, green: 0.08, blue: 0.10, alpha: 1)]
+            return [
+                NSColor(srgbRed: 0.20, green: 0.21, blue: 0.25, alpha: 1),
+                NSColor(srgbRed: 0.08, green: 0.08, blue: 0.10, alpha: 1),
+            ]
         case .paper:
-            return [NSColor(srgbRed: 0.99, green: 0.985, blue: 0.97, alpha: 1),
-                    NSColor(srgbRed: 0.93, green: 0.92, blue: 0.90, alpha: 1)]
+            return [
+                NSColor(srgbRed: 0.99, green: 0.985, blue: 0.97, alpha: 1),
+                NSColor(srgbRed: 0.93, green: 0.92, blue: 0.90, alpha: 1),
+            ]
         case .accent:
-            return [NSColor(srgbRed: 0.35, green: 0.48, blue: 0.95, alpha: 1),
-                    NSColor(srgbRed: 0.16, green: 0.27, blue: 0.72, alpha: 1)]
+            return [
+                NSColor(srgbRed: 0.35, green: 0.48, blue: 0.95, alpha: 1),
+                NSColor(srgbRed: 0.16, green: 0.27, blue: 0.72, alpha: 1),
+            ]
         }
     }
 
@@ -39,9 +45,10 @@ enum Variant: String {
 }
 
 func drawIcon(_ variant: Variant, size: CGFloat) -> NSBitmapImageRep {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size), pixelsHigh: Int(size),
-                               bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                               colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: Int(size), pixelsHigh: Int(size),
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
@@ -63,9 +70,11 @@ func drawIcon(_ variant: Variant, size: CGFloat) -> NSBitmapImageRep {
         .kern: -size * 0.012,
     ]
     let bounds = glyph.size(withAttributes: attrs)
-    glyph.draw(at: NSPoint(x: (size - bounds.width) / 2,
-                           y: (size - bounds.height) / 2 - size * 0.012),
-               withAttributes: attrs)
+    glyph.draw(
+        at: NSPoint(
+            x: (size - bounds.width) / 2,
+            y: (size - bounds.height) / 2 - size * 0.012),
+        withAttributes: attrs)
 
     NSGraphicsContext.restoreGraphicsState()
     return rep
@@ -78,9 +87,10 @@ if args.count > 2, args[1] == "--sheet" {
     let out = args[2]
     let variant = Variant(rawValue: args.count > 3 ? args[3] : "ink") ?? .ink
     let width: CGFloat = 900, height: CGFloat = 520
-    let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(width), pixelsHigh: Int(height),
-                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    let sheet = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: Int(width), pixelsHigh: Int(height),
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
     NSColor(white: 0.62, alpha: 1).setFill()
@@ -101,10 +111,12 @@ if args.count > 2, args[1] == "--sheet" {
         x += side + 22
     }
     let label = "\(variant.rawValue)  —  actual Dock sizes: 128, 96, 64, 32" as NSString
-    label.draw(at: NSPoint(x: 44, y: 70), withAttributes: [
-        .font: NSFont.systemFont(ofSize: 20, weight: .medium),
-        .foregroundColor: NSColor.white,
-    ])
+    label.draw(
+        at: NSPoint(x: 44, y: 70),
+        withAttributes: [
+            .font: NSFont.systemFont(ofSize: 20, weight: .medium),
+            .foregroundColor: NSColor.white,
+        ])
     NSGraphicsContext.restoreGraphicsState()
     try png(sheet).write(to: URL(fileURLWithPath: out))
     print("wrote \(out)")

@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import Combine
+import SwiftUI
 
 @main
 struct MDViewApp: App {
@@ -120,9 +120,11 @@ struct ViewerCommands: Commands {
         CommandMenu("View") {
             Button("Toggle Sidebar") { send(.mdvToggleSidebar) }
                 .keyboardShortcut("b")
-            Toggle("Show All Files in Sidebar", isOn: Binding(
-                get: { workspace.showAllFiles },
-                set: { workspace.showAllFiles = $0 }))
+            Toggle(
+                "Show All Files in Sidebar",
+                isOn: Binding(
+                    get: { workspace.showAllFiles },
+                    set: { workspace.showAllFiles = $0 }))
             Button("Refresh Sidebar") { workspace.refresh() }
             // For `npm run watch`: reloads the page itself, picking up a rebuilt
             // bundle. Plain ⌘R only re-renders the document.
@@ -136,9 +138,13 @@ struct ViewerCommands: Commands {
             Button("Actual Size") { send(.mdvZoomReset) }
                 .keyboardShortcut("0")
             Divider()
-            Toggle("Show Frontmatter", isOn: Binding(
-                get: { showFrontmatter },
-                set: { showFrontmatter = $0; send(.mdvSettingsChanged) }))
+            Toggle(
+                "Show Frontmatter",
+                isOn: Binding(
+                    get: { showFrontmatter },
+                    set: {
+                        showFrontmatter = $0; send(.mdvSettingsChanged)
+                    }))
             Button("Toggle Serif Reading Font") { send(.mdvToggleFont) }
                 .keyboardShortcut("s", modifiers: [.command, .option])
         }

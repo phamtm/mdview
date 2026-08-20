@@ -10,9 +10,11 @@ import DOMPurify from "dompurify";
 (function () {
   "use strict";
 
-  const bridge = window.webkit && window.webkit.messageHandlers
-    ? window.webkit.messageHandlers.mdview : null;
-  const post = (msg) => { if (bridge) bridge.postMessage(msg); };
+  const bridge =
+    window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers.mdview : null;
+  const post = (msg) => {
+    if (bridge) bridge.postMessage(msg);
+  };
 
   const elDoc = document.getElementById("doc");
   const elEmpty = document.getElementById("empty");
@@ -20,9 +22,9 @@ import DOMPurify from "dompurify";
   const elFind = document.getElementById("findinput");
 
   let current = { path: "", dir: "" };
-  let renderToken = 0;    // guards async mermaid work against a newer render
-  let diagramPass = 0;    // unique ids per mermaid draw pass
-  let diagrams = [];      // {el, code} for the document on screen
+  let renderToken = 0; // guards async mermaid work against a newer render
+  let diagramPass = 0; // unique ids per mermaid draw pass
+  let diagrams = []; // {el, code} for the document on screen
 
   // gfm covers tables, strikethrough, task lists and autolinks. Footnotes are a
   // GitHub extension on top of that, so they come from a marked plugin.
@@ -36,15 +38,23 @@ import DOMPurify from "dompurify";
   const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
   function escapeHtml(s) {
-    return s.replace(/[&<>"]/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    return s.replace(
+      /[&<>"]/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]
+    );
   }
 
   function encodeSegments(path) {
-    return path.split("/").map((seg) => {
-      try { return encodeURIComponent(decodeURIComponent(seg)); }
-      catch (_) { return encodeURIComponent(seg); }
-    }).join("/");
+    return path
+      .split("/")
+      .map((seg) => {
+        try {
+          return encodeURIComponent(decodeURIComponent(seg));
+        } catch (_) {
+          return encodeURIComponent(seg);
+        }
+      })
+      .join("/");
   }
 
   /** Turn a markdown-relative path into something WebKit can load. */
@@ -63,15 +73,20 @@ import DOMPurify from "dompurify";
   }
 
   function slug(text, seen) {
-    let base = text.toLowerCase().trim()
-      .replace(/[^\w\s\-]/g, "")
-      .replace(/\s+/g, "-") || "section";
-    let id = base, n = 1;
-    while (seen.has(id)) { id = base + "-" + (++n); }
+    let base =
+      text
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s\-]/g, "")
+        .replace(/\s+/g, "-") || "section";
+    let id = base,
+      n = 1;
+    while (seen.has(id)) {
+      id = base + "-" + ++n;
+    }
     seen.add(id);
     return id;
   }
-
 
   // --- frontmatter ----------------------------------------------------------
 
@@ -83,7 +98,12 @@ import DOMPurify from "dompurify";
   }
 
   function unquote(value) {
-    return value.trim().replace(/,$/, "").trim().replace(/^(['"])([\s\S]*)\1$/, "$2").trim();
+    return value
+      .trim()
+      .replace(/,$/, "")
+      .trim()
+      .replace(/^(['"])([\s\S]*)\1$/, "$2")
+      .trim();
   }
 
   /**
@@ -98,7 +118,7 @@ import DOMPurify from "dompurify";
       const line = lines[i];
       if (!line.trim() || /^\s*#/.test(line)) continue;
       const match = /^([A-Za-z0-9_.\-]+)\s*[:=]\s*(.*)$/.exec(line);
-      if (!match) continue;                       // indented sub-keys, etc.
+      if (!match) continue; // indented sub-keys, etc.
       const key = match[1];
       const value = match[2].trim();
 
@@ -108,7 +128,7 @@ import DOMPurify from "dompurify";
           items.push(unquote(lines[++i].replace(/^\s*-\s+/, "")));
         }
         if (items.length) fields.push([key, items.filter(Boolean)]);
-        continue;                                 // a bare key holds a nested map
+        continue; // a bare key holds a nested map
       }
       if (/^\[[\s\S]*\]$/.test(value)) {
         fields.push([key, value.slice(1, -1).split(",").map(unquote).filter(Boolean)]);
@@ -174,7 +194,9 @@ import DOMPurify from "dompurify";
     root.querySelectorAll("blockquote").forEach((quote) => {
       const first = quote.firstElementChild;
       if (!first || first.tagName !== "P") return;
-      const match = /^\s*\[!(note|tip|important|warning|caution)\]\s*/i.exec(first.textContent || "");
+      const match = /^\s*\[!(note|tip|important|warning|caution)\]\s*/i.exec(
+        first.textContent || ""
+      );
       if (!match) return;
       const kind = match[1].toLowerCase();
       if (!ALERT_KINDS.includes(kind)) return;
@@ -246,12 +268,19 @@ import DOMPurify from "dompurify";
         post({ action: "copyText", text: source });
         copy.textContent = "Copied";
         copy.classList.add("done");
-        setTimeout(() => { copy.textContent = "Copy"; copy.classList.remove("done"); }, 1400);
+        setTimeout(() => {
+          copy.textContent = "Copy";
+          copy.classList.remove("done");
+        }, 1400);
       });
       figure.appendChild(copy);
 
       if (lang && hljs.getLanguage(lang)) {
-        try { hljs.highlightElement(code); } catch (_) { /* leave plain */ }
+        try {
+          hljs.highlightElement(code);
+        } catch (_) {
+          /* leave plain */
+        }
       }
     });
     return diagrams;
@@ -272,7 +301,7 @@ import DOMPurify from "dompurify";
     });
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href");
-      if (href && href.startsWith("#")) return;   // in-page anchor, leave alone
+      if (href && href.startsWith("#")) return; // in-page anchor, leave alone
       a.href = resolveURL(href);
     });
   }
@@ -307,7 +336,10 @@ import DOMPurify from "dompurify";
     try {
       await ensureMermaid();
     } catch (e) {
-      diagrams.forEach((d) => { d.el.className = "error"; d.el.textContent = e.message; });
+      diagrams.forEach((d) => {
+        d.el.className = "error";
+        d.el.textContent = e.message;
+      });
       return;
     }
     if (token !== renderToken) return;
@@ -346,8 +378,8 @@ import DOMPurify from "dompurify";
         if (token !== renderToken) return;
         d.el.innerHTML = out.svg;
       } catch (e) {
-        d.el.innerHTML = '<div class="error">Mermaid: ' +
-          escapeHtml(String((e && e.message) || e)) + "</div>";
+        d.el.innerHTML =
+          '<div class="error">Mermaid: ' + escapeHtml(String((e && e.message) || e)) + "</div>";
       }
     }
   }
@@ -396,7 +428,9 @@ import DOMPurify from "dompurify";
     const behavior = root.style.scrollBehavior;
     root.style.scrollBehavior = "auto";
     window.scrollTo(0, keepY);
-    requestAnimationFrame(() => { root.style.scrollBehavior = behavior; });
+    requestAnimationFrame(() => {
+      root.style.scrollBehavior = behavior;
+    });
 
     elDoc.classList.add("ready");
     drawDiagrams(token);
@@ -420,15 +454,23 @@ import DOMPurify from "dompurify";
 
   function step(backwards) {
     const q = elFind.value;
-    if (!q) { elBar.classList.remove("nomatch"); return; }
+    if (!q) {
+      elBar.classList.remove("nomatch");
+      return;
+    }
     const found = window.find(q, false, backwards, true, false, false, false);
     elBar.classList.toggle("nomatch", !found);
   }
 
   elFind.addEventListener("input", () => step(false));
   elFind.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); step(e.shiftKey); }
-    else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      step(e.shiftKey);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeFind();
+    }
   });
   document.getElementById("findnext").addEventListener("click", () => step(false));
   document.getElementById("findprev").addEventListener("click", () => step(true));

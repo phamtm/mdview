@@ -35,8 +35,9 @@ struct SidebarView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(workspace.rows.enumerated()), id: \.element.id) { index, row in
-                    SidebarRowView(row: row, isFirst: index == 0,
-                                   workspace: workspace, doc: doc)
+                    SidebarRowView(
+                        row: row, isFirst: index == 0,
+                        workspace: workspace, doc: doc)
                 }
                 addFolderRow
             }
@@ -129,9 +130,11 @@ struct SidebarRowView: View {
 
     private var title: some View {
         Text(isSectionHeader ? node.name.uppercased() : node.name)
-            .font(.system(
-                size: isSectionHeader ? 10.5 : SidebarView.fontSize,
-                weight: isSectionHeader ? .semibold : .regular))
+            .font(
+                .system(
+                    size: isSectionHeader ? 10.5 : SidebarView.fontSize,
+                    weight: isSectionHeader ? .semibold : .regular)
+            )
             .tracking(isSectionHeader ? 0.5 : 0)
             .foregroundStyle(isSectionHeader ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             .lineLimit(1)

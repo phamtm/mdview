@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import Combine
+import SwiftUI
 
 /// Sidebar and document side by side, with no divider between them. Built by
 /// hand rather than with NavigationSplitView, which insists on drawing one.
@@ -61,7 +61,9 @@ struct ViewerView: View {
         .onChange(of: doc.url) { _, url in
             if let url { workspace.reveal(url) }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
             workspace.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleSidebar)) { _ in
@@ -197,4 +199,3 @@ struct WindowChrome: NSViewRepresentable {
         DispatchQueue.main.async { WindowStyler.shared.apply(view.window) }
     }
 }
-

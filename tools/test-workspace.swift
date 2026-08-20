@@ -22,10 +22,12 @@ MainActor.assumeIsolated {
     let base = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("mdview-workspace-test-\(UUID().uuidString)")
     let root = base.appendingPathComponent("project")
-    for path in ["README.md", "docs/guide.md", "docs/deep/nested.md", "src/main.swift", "zebra.md"] {
+    for path in ["README.md", "docs/guide.md", "docs/deep/nested.md", "src/main.swift", "zebra.md"]
+    {
         let url = root.appendingPathComponent(path)
-        try! FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
+        try! FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
         try! "# x\n".write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -35,7 +37,11 @@ MainActor.assumeIsolated {
     workspace.add(root)
 
     check("adding a folder creates one root", workspace.roots.count == 1)
-    check("adding the same folder twice is ignored", { workspace.add(root); return workspace.roots.count == 1 }())
+    check(
+        "adding the same folder twice is ignored",
+        {
+            workspace.add(root); return workspace.roots.count == 1
+        }())
 
     guard let node = workspace.roots.first else { print("WORKSPACE TESTS FAILED"); exit(1) }
     let names = node.children.map(\.name)
@@ -49,7 +55,8 @@ MainActor.assumeIsolated {
     src.isExpanded = true
     check("expanded folder hides non-markdown files", src.children.isEmpty)
     workspace.showAllFiles = true
-    check("show-all reaches already-expanded subfolders", src.children.map(\.name) == ["main.swift"])
+    check(
+        "show-all reaches already-expanded subfolders", src.children.map(\.name) == ["main.swift"])
     workspace.showAllFiles = false
     check("turning show-all off hides them again", src.children.isEmpty)
 
@@ -59,7 +66,9 @@ MainActor.assumeIsolated {
     let docs = node.children.first { $0.name == "docs" }
     let deepDir = docs?.children.first { $0.name == "deep" }
     check("reveal expands the root", node.isExpanded)
-    check("reveal expands intermediate folders", docs?.isExpanded == true && deepDir?.isExpanded == true)
+    check(
+        "reveal expands intermediate folders",
+        docs?.isExpanded == true && deepDir?.isExpanded == true)
     check("revealed file is present", deepDir?.children.contains { $0.name == "nested.md" } == true)
 
     // an expanded folder should notice a file appearing on disk
@@ -77,8 +86,9 @@ MainActor.assumeIsolated {
     // one added folder contains another, which puts the same file on screen twice.
     workspace.add(root.appendingPathComponent("docs"))
     let ids = workspace.rows.map(\.id)
-    check("row ids stay unique with overlapping roots (\(ids.count) rows)",
-          Set(ids).count == ids.count)
+    check(
+        "row ids stay unique with overlapping roots (\(ids.count) rows)",
+        Set(ids).count == ids.count)
     check("overlapping root is listed", workspace.roots.count == 2)
 
     workspace.roots.forEach { workspace.remove($0) }

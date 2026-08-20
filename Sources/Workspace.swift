@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 /// One entry in the sidebar tree — a folder or a file.
 ///
@@ -71,16 +71,19 @@ final class FileNode: ObservableObject, Identifiable {
         loaded = true
         let showAll = workspace?.showAllFiles ?? false
         let keys: [URLResourceKey] = [.isDirectoryKey]
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
+        let contents =
+            (try? FileManager.default.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
 
-        let existing = Dictionary(children.map { ($0.url.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let existing = Dictionary(
+            children.map { ($0.url.path, $0) }, uniquingKeysWith: { first, _ in first })
         var next: [FileNode] = []
         for item in contents {
             let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if !isDir, !showAll, !Viewer.isTextLike(item) { continue }
-            next.append(existing[item.path]
-                ?? FileNode(url: item, isDirectory: isDir, workspace: workspace))
+            next.append(
+                existing[item.path]
+                    ?? FileNode(url: item, isDirectory: isDir, workspace: workspace))
         }
         next.sort { lhs, rhs in
             if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
@@ -123,7 +126,8 @@ final class WorkspaceModel: ObservableObject {
     private init() {
         showAllFiles = UserDefaults.standard.bool(forKey: showAllKey)
         let saved = UserDefaults.standard.stringArray(forKey: rootsKey) ?? []
-        roots = saved
+        roots =
+            saved
             .filter { isDirectory(URL(fileURLWithPath: $0)) }
             .map { makeRoot(URL(fileURLWithPath: $0)) }
         roots.forEach { $0.isExpanded = true }
@@ -169,7 +173,9 @@ final class WorkspaceModel: ObservableObject {
 
     func add(_ url: URL) {
         let target = url.standardizedFileURL
-        guard isDirectory(target), !roots.contains(where: { $0.url.path == target.path }) else { return }
+        guard isDirectory(target), !roots.contains(where: { $0.url.path == target.path }) else {
+            return
+        }
         let root = makeRoot(target)
         roots.append(root)
         root.isExpanded = true
@@ -198,7 +204,8 @@ final class WorkspaceModel: ObservableObject {
 
     private func expand(_ node: FileNode, towards path: String) {
         node.isExpanded = true
-        for child in node.children where child.isDirectory && path.hasPrefix(child.canonicalPath + "/") {
+        for child in node.children
+        where child.isDirectory && path.hasPrefix(child.canonicalPath + "/") {
             expand(child, towards: path)
         }
     }

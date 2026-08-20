@@ -18,7 +18,7 @@ const watch = process.argv.includes("--watch");
 const shared = {
   bundle: true,
   format: "iife",
-  target: "safari17",          // WKWebView on the macOS versions we support
+  target: "safari17", // WKWebView on the macOS versions we support
   minify: !watch,
   sourcemap: watch ? "inline" : false,
   legalComments: "none",

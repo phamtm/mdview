@@ -16,10 +16,14 @@ let watcher = FileWatcher(url: file) {
 _ = watcher
 
 func waitForHit(_ label: String, timeout: TimeInterval = 3.0) -> Bool {
-    let before = { lock.lock(); defer { lock.unlock() }; return hits }()
+    let before = {
+        lock.lock(); defer { lock.unlock() }; return hits
+    }()
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
-        let now = { lock.lock(); defer { lock.unlock() }; return hits }()
+        let now = {
+            lock.lock(); defer { lock.unlock() }; return hits
+        }()
         if now > before { print("  ok   \(label)"); return true }
         usleep(50_000)
     }
@@ -27,7 +31,7 @@ func waitForHit(_ label: String, timeout: TimeInterval = 3.0) -> Bool {
     return false
 }
 
-Thread.sleep(forTimeInterval: 0.4)   // let the watcher arm itself
+Thread.sleep(forTimeInterval: 0.4)  // let the watcher arm itself
 
 var passed = true
 

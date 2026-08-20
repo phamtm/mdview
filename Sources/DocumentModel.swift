@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 import UniformTypeIdentifiers
 
 /// Holds the markdown file currently on screen, reloads it when it changes on
@@ -30,7 +30,8 @@ final class DocumentModel: ObservableObject {
 
     var lastDocument: URL? {
         guard let path = UserDefaults.standard.string(forKey: lastDocumentKey),
-              FileManager.default.fileExists(atPath: path) else { return nil }
+            FileManager.default.fileExists(atPath: path)
+        else { return nil }
         return URL(fileURLWithPath: path)
     }
 
@@ -94,4 +95,3 @@ final class DocumentModel: ObservableObject {
         UserDefaults.standard.set(url.path, forKey: lastDocumentKey)
     }
 }
-
