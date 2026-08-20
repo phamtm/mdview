@@ -7,7 +7,7 @@
  *               pin keeps it open and the column shifts right to make room
  */
 
-const DWELL_MS = 3000;
+const DWELL_MS = 2000;
 const SNIPPET_CHARS = 116;
 /** Tick length by heading level, before any hover swell. */
 const TICK_WIDTH = { 1: 26, 2: 17, 3: 11 };

@@ -210,14 +210,18 @@ struct TitleBar: View {
     }
 
     /// Holds the traffic lights, with the toggle at its inner edge.
+    ///
+    /// The padding goes inside the frame: applied outside it, the zone ends up
+    /// wider than the sidebar and this hairline no longer lines up with the
+    /// sidebar's own right edge below.
     private var leftZone: some View {
         HStack(spacing: 0) {
             Spacer(minLength: ViewerView.trafficLightSpan)
             IconButton(symbol: "sidebar.leading", palette: palette, action: toggleSidebar)
                 .help("Toggle sidebar (⌘B)")
+                .padding(.trailing, 13.8)
         }
         .frame(width: max(sidebarWidth, 120))
-        .padding(.trailing, 13.8)
         .overlay(alignment: .trailing) {
             Rectangle().fill(palette.divider).frame(width: 1)
         }
