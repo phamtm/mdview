@@ -113,7 +113,9 @@ export function createRail(post) {
 
   /** Reads the outline out of the rendered document. */
   function readOutline(root) {
-    const selector = "h1:not(.sr-only), h2:not(.sr-only), h3:not(.sr-only)";
+    // Not `:not(.sr-only)`: the heading to leave out is the one the viewer added,
+    // not one whose class happens to match. See markChrome() in viewer.js.
+    const selector = "h1:not([data-chrome]), h2:not([data-chrome]), h3:not([data-chrome])";
     return Array.from(root.querySelectorAll(selector)).map((node) => {
       let next = node.nextElementSibling;
       while (next && !/^(P|UL|OL|BLOCKQUOTE)$/.test(next.tagName)) next = next.nextElementSibling;

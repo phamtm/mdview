@@ -25,14 +25,18 @@ const MATCH_LIMIT = 2000;
  *
  *  - `script` / `style` — never rendered, and a mermaid diagram carries a
  *    `<style>` block of its own inside #doc.
- *  - `.sr-only` — the "Footnotes" heading marked-footnote emits for screen
- *    readers.
- *  - `.anchor` — the aria-hidden "#" viewer.js puts at the front of every
- *    heading, which would also cut a heading's own words in two.
- *  - `.copy` — the code figure's button. It is a control, and its label
- *    changes to "Copied" while you look at it.
+ *  - `[data-chrome]` — everything the viewer adds to the document rather than
+ *    finds in it: the aria-hidden "#" before a heading (which would also cut the
+ *    heading's own words in two), a code figure's language badge and its copy
+ *    button, and marked-footnote's screen-reader "Footnotes" heading. See
+ *    markChrome() in viewer.js.
+ *
+ *  This used to name the classes instead — `.sr-only, .anchor, .copy` — which
+ *  were the document's to use as much as ours. A page with `class="anchor"` on
+ *  its permalinks, the usual convention, had that text dropped from the index,
+ *  so ⌘F said "no match" for words on the screen.
  */
-const SKIP = "script, style, .sr-only, .anchor, .copy";
+const SKIP = "script, style, [data-chrome]";
 
 /** Tags whose text runs straight on into their neighbours'. Everything else is
  *  treated as a block: a newline goes in on the way in and on the way out, so a

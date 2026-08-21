@@ -216,6 +216,12 @@ final class Runner: NSObject, WKNavigationDelegate {
               // when checking that a `---` first line costs an HTML file
               // nothing, and an HTML file has no outline to ask any more.
               h1s: document.querySelectorAll('#doc h1:not(.fm-title)').length,
+              // Everything the viewer added to the document rather than found in
+              // it. This is what the find bar and the outline skip, so if the
+              // marking stops happening they start indexing the viewer's own
+              // furniture — a heading would read "#Heading" and a code figure
+              // would carry the words "mermaid" and "Copy".
+              chromeMarked: document.querySelectorAll('#doc [data-chrome]').length,
               headingIds: document.querySelectorAll('#doc h2[id]').length,
               codeFigures: document.querySelectorAll('#doc figure.code').length,
               highlighted: document.querySelectorAll('#doc figure.code code .hljs-keyword, #doc figure.code code .hljs-string').length,
@@ -574,6 +580,11 @@ final class Runner: NSObject, WKNavigationDelegate {
             the next, so a naive concatenation would find a word that is not on \
             the page.</div>
 
+            <p class="anchor">A permalink clash: chromeclash.</p>
+            <p class="sr-only">Bootstrap's hidden class: chromeclash.</p>
+            <p class="copy">An ordinary word for a footer: chromeclash.</p>
+            <p data-chrome="">And a page claiming the marker itself: chromeclash.</p>
+
             \(filler)
 
             A third highlight, far enough down that stepping to it has to scroll.
@@ -583,6 +594,11 @@ final class Runner: NSObject, WKNavigationDelegate {
     /// The split phrase, and the word two blocks must not make between them.
     static let findAcrossQuery = "markdown"
     static let findJoinQuery = "there"
+    /// Sits four times in findMarkdown: once inside each of the three classes the
+    /// viewer used to skip by name — `anchor`, `sr-only`, `copy` — and once in an
+    /// element that sets `data-chrome` itself, which the sanitiser has to strip.
+    /// All four are ordinary visible prose, so all four have to be findable.
+    static let findChromeQuery = "chromeclash"
 
     /// Typed one character at a time, and chosen for its letters: `h`, `g` and
     /// `l` are all bound to plain reading keys, so a run where the app stops
@@ -768,12 +784,16 @@ final class Runner: NSObject, WKNavigationDelegate {
     private func checkFindAcrossMarkup() {
         runFindQuery(Runner.findAcrossQuery) { across in
             self.runFindQuery(Runner.findJoinQuery) { joined in
-                self.webView.evaluateJavaScript("window.mdview.dismissFind(); 'ok'") { _, _ in
-                    print(
-                        "FINDMARKUP {\"acrossQuery\":\"\(Runner.findAcrossQuery)\","
-                            + "\"joinQuery\":\"\(Runner.findJoinQuery)\","
-                            + "\"across\":\(across),\"joined\":\(joined)}")
-                    self.checkSelectionGutter()
+                self.runFindQuery(Runner.findChromeQuery) { clash in
+                    self.webView.evaluateJavaScript("window.mdview.dismissFind(); 'ok'") { _, _ in
+                        print(
+                            "FINDMARKUP {\"acrossQuery\":\"\(Runner.findAcrossQuery)\","
+                                + "\"joinQuery\":\"\(Runner.findJoinQuery)\","
+                                + "\"chromeQuery\":\"\(Runner.findChromeQuery)\","
+                                + "\"across\":\(across),\"joined\":\(joined),"
+                                + "\"clash\":\(clash)}")
+                        self.checkSelectionGutter()
+                    }
                 }
             }
         }

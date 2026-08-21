@@ -31,6 +31,12 @@ EXPECT = {
     "railTicks": lambda v: v >= 8,
     "railHidden": lambda v: v is False,
     "asciiBlocks": lambda v: v == 1,
+    # Everything the viewer added rather than found: 11 heading anchors, 4 copy
+    # buttons, 5 language badges and marked-footnote's screen-reader heading. All
+    # of it is marked so the find bar and the outline can skip it — by an
+    # attribute the document cannot supply, since the class names this replaced
+    # (`anchor`, `sr-only`, `copy`) were the document's to use as well.
+    "chromeMarked": lambda v: v == 21,
     # The column clears the contents rail by 68px. This lived in a duplicate
     # .prose rule for a while and won only by being last in the file.
     "proseLeftPadding": lambda v: v == "68px",
@@ -345,11 +351,26 @@ for path in sys.argv[1:]:
                             f"({joined['matches']} matches) — the two blocks were joined")
         if joined["paintedAll"] or joined["paintedCurrent"]:
             problems.append(f"{no!r} left something painted")
+        # The viewer skips its own additions when indexing, and it used to name
+        # them by class — `.anchor`, `.sr-only`, `.copy` — which the document is
+        # entitled to use too. A page with `class="anchor"` on its permalinks had
+        # that text dropped, so ⌘F said "no match" for words on the screen. Four
+        # elements hold the query now: those three classes, and one that sets
+        # `data-chrome` itself, to check the sanitiser takes it away again.
+        clash = markup["clash"]
+        if clash["matches"] != 4:
+            problems.append(f"{markup['chromeQuery']!r} found {clash['matches']} times, want 4 "
+                            "— the viewer is skipping the document's own text because a class "
+                            "name collided with one of its own")
+        if clash["nomatch"]:
+            problems.append(f"the bar says no match for {markup['chromeQuery']!r}")
         for problem in problems:
             print(f"  FAIL {path}: find across markup — {problem}")
         if problems:
             failed = True
         else:
+            print(f"  ok   {path}: a document's own `anchor`/`sr-only`/`copy` text is "
+                  f"searchable, and it cannot claim `data-chrome`")
             print(f"  ok   {path}: {markup['acrossQuery']!r} found across inline markup "
                   f"({across['currentStartTag']} → {across['currentEndTag']}, painted), "
                   f"{markup['joinQuery']!r} not found across a block boundary")

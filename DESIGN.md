@@ -197,8 +197,15 @@ Implementation notes that are easy to trip over:
   boundary too, and so is anything in an SVG, whose labels are separate strings
   rather than a sentence. Text that is on the page but is not the document's is
   left out: `script` and `style` (a mermaid diagram ships a `<style>` of its
-  own), the `.sr-only` footnotes heading, the aria-hidden `#` heading anchors,
-  and the code figure's Copy button, whose label changes while you look at it.
+  own), plus everything the viewer added rather than found — the aria-hidden `#`
+  heading anchors, the code figure's language badge and its Copy button (whose
+  label changes while you look at it), and marked-footnote's screen-reader
+  "Footnotes" heading. Those are found by a `data-chrome` attribute the viewer
+  sets and DOMPurify strips from the document, not by their class names. It was
+  the class names — `.anchor`, `.sr-only`, `.copy` — and those belonged to the
+  document as much as to us: a page with `class="anchor"` on its permalinks,
+  which is the usual convention, had that text dropped from the index, so ⌘F
+  answered "no match" for words the reader was looking at.
   `tools/check-render.py` asserts both halves: a match that starts in a `p` and
   ends in a `strong`, and two adjacent blocks that must not join. That negative
   case is written as bare `<div>`s on purpose — marked emits a newline between

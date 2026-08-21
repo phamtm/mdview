@@ -241,6 +241,10 @@ if data["strikethrough"]:
 if data["tables"] != 1: problems.append(f"{data['tables']} tables, want 1")
 if data["headings"] != 5: problems.append(f"{data['headings']} h2s in the document, want 5")
 if data["headingIds"] != 5: problems.append(f"{data['headingIds']} h2s carry an id, want 5")
+# Six heading anchors — one h1 and five h2s — each marked as the viewer's own, so
+# the find bar leaves the "#" out of the heading's words.
+if data["chromeMarked"] != 6:
+    problems.append(f"{data['chromeMarked']} elements marked as chrome, want 6")
 
 # --- safely ------------------------------------------------------------------
 # Both formats go through DOMPurify, which is why skipping the parser cannot also

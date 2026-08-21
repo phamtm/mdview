@@ -129,13 +129,35 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   // --- post-processing passes ----------------------------------------------
 
+  /**
+   * Marks what on the page is ours rather than the document's, so the find bar
+   * and the outline can leave it alone.
+   *
+   * An attribute we control, not a class name, and DOMPurify is told to strip it
+   * from the document (FORBID_ATTR) so a page cannot claim it. The classes this
+   * replaces belonged to the document as much as to us: `class="anchor"` is the
+   * usual convention for a heading permalink, `sr-only` is Bootstrap's and
+   * Tailwind's, and `copy` is an ordinary word for a copyright line. A page using
+   * any of them had that text dropped from the search index, so ⌘F answered "no
+   * match" for words the reader was looking at.
+   */
+  function markChrome(root) {
+    // marked-footnote's "Footnotes" heading — the only chrome in the document
+    // that we did not put there. Identified by the library's own attribute on
+    // the section, rather than by the `sr-only` class an author may also use.
+    root.querySelectorAll("[data-footnotes] > h2.sr-only").forEach((h) => {
+      h.setAttribute("data-chrome", "");
+    });
+  }
+
   function addHeadingAnchors(root) {
     const seen = new Set();
-    const headings = "h1:not(.fm-title), h2:not(.sr-only), h3, h4, h5, h6";
+    const headings = "h1:not(.fm-title), h2:not([data-chrome]), h3, h4, h5, h6";
     root.querySelectorAll(headings).forEach((h) => {
       if (!h.id) h.id = slug(h.textContent || "", seen);
       const a = document.createElement("a");
       a.className = "anchor";
+      a.setAttribute("data-chrome", "");
       a.href = "#" + h.id;
       a.textContent = "#";
       a.setAttribute("aria-hidden", "true");
@@ -157,6 +179,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
         const caption = document.createElement("figcaption");
         const label = document.createElement("span");
         label.className = "lang";
+        label.setAttribute("data-chrome", "");
         label.textContent = "mermaid";
         caption.appendChild(label);
         const holder = document.createElement("div");
@@ -177,6 +200,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       const caption = document.createElement("figcaption");
       const tag = document.createElement("span");
       tag.className = "lang";
+      tag.setAttribute("data-chrome", "");
       tag.textContent = lang || "text";
       caption.appendChild(tag);
       figure.appendChild(caption);
@@ -184,6 +208,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
       const copy = document.createElement("button");
       copy.className = "copy";
+      copy.setAttribute("data-chrome", "");
       copy.type = "button";
       copy.textContent = "Copy";
       copy.addEventListener("click", () => {
@@ -599,7 +624,11 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // The sanitiser is not what changes. Both formats go through it, which is
     // why skipping the parser cannot also skip the stripping of <script>.
     const dirty = isHtml ? split.body : marked.parse(split.body);
-    elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
+    elDoc.innerHTML = DOMPurify.sanitize(dirty, {
+      ADD_ATTR: ["target"],
+      // So `data-chrome` can only ever mean "viewer.js put this here".
+      FORBID_ATTR: ["data-chrome"],
+    });
 
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
@@ -607,6 +636,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       if (header) elDoc.insertBefore(header, elDoc.firstChild);
     }
 
+    markChrome(elDoc);
     addHeadingAnchors(elDoc);
     decorateAlerts(elDoc);
     diagrams = decorateCode(elDoc);
