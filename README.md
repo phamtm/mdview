@@ -269,24 +269,39 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-About 70 seconds. Two things keep it there, and both are easy to undo by
-accident:
+Under 40 seconds, and about 25 when nothing has changed. Four things keep it
+there, and all of them are easy to undo by accident:
 
-- The harnesses build with `-Onone -wmo`, all at once. Each one is the same ~16
-  source files plus its own `main.swift`, so building them one at a time with
+- **The harnesses build with `-Onone -wmo`, all at once.** Each one is the same
+  ~16 source files plus its own `main.swift`, so building them one at a time with
   `-O` was 48s — more than every check in the suite put together. Nothing here
-  measures throughput and the runs are the same speed either way, so optimising
-  is pure cost.
-- Waits on the page poll, they don't sleep. The mermaid wait used to be a flat
-  3s; the diagram is actually drawn in 0.1s.
+  measures throughput and the runs come out the same speed either way, so
+  optimising was pure cost.
+- **Waits poll the page, they don't sleep.** The mermaid wait used to be a flat
+  3s; the diagram is drawn in 0.1s.
+- **Nothing is rebuilt that is already newer than its inputs** — neither a
+  harness nor the app. Get that input list wrong and tests run against a stale
+  build, which is loud; it cannot make them flake.
+- **One render runs the theme-independent checks, not all six.** The frontmatter
+  parser, the word count, page focus, the heading clamp and the selection gutter
+  reach the same verdict whichever palette is loaded, and running them per theme
+  was ~3.5s a render for the same answer five times over. `MDVIEW_BATTERY=theme`
+  runs the two phases that *do* vary — the diagnostics probe, and the second
+  render, which switches theme and so exercises each palette as both a starting
+  point and a destination. Full is the default, and `check-render.py` fails if no
+  render ran it, so this cannot quietly become "checks nothing".
 
-The full-window offscreen render is not part of the suite. It only ever wrote
-PNGs that nothing read, so it could never fail — 16s a run for no coverage. It
-lives on its own, for when you want to look at it:
+The PNGs are not tests — no check has ever read one, and writing one means
+holding the page still for 1.2s. They are off in the suite. To write every image
+the harnesses can produce, including the full-window render:
 
 ```bash
 ./tools/shots.sh
 ```
+
+That render used to be a suite step, at 16s a run, and it had no assertions at
+all — it could not fail. What the real window looks like is
+`check-window-chrome.sh`, which asks the running app.
 
 Twelve checks, in the order they run:
 

@@ -14,6 +14,24 @@ let prefix = args[3]
 let mode = args.count > 4 ? args[4] : "light"
 // Pass "nofm" as a 6th argument to render with the frontmatter header switched off.
 let showFrontmatter = !(args.count > 5 && args[5] == "nofm")
+/// Which checks this render runs.
+///
+/// Most of them do not depend on the theme — the frontmatter parser, the word
+/// count, page focus, the heading clamp, the selection gutter — and running them
+/// once per theme was ~3.5s a render for the same answer five times over.
+/// `MDVIEW_BATTERY=theme` runs the two phases that do vary: the diagnostics
+/// probe, which carries the palette, and the second render, which switches
+/// theme and so exercises this one as both a starting point and a destination.
+///
+/// Full is the default deliberately. A render added without thinking about this
+/// then costs time rather than coverage, and tools/check-render.py insists that
+/// exactly one file ran the full battery, so dropping it everywhere fails loudly
+/// instead of quietly passing with nothing checked.
+let fullBattery = (ProcessInfo.processInfo.environment["MDVIEW_BATTERY"] ?? "full") != "theme"
+/// The PNGs are for looking at — no test has ever read one. Writing one means
+/// holding the page still for 1.2s, which was the most expensive moment in the
+/// run, so it happens only when asked: MDVIEW_SHOTS=1, or tools/shots.sh.
+let wantShots = ProcessInfo.processInfo.environment["MDVIEW_SHOTS"] != nil
 let firstTheme = ProcessInfo.processInfo.environment["MDVIEW_THEME"] ?? "paper"
 /// The theme the *second* render asks for. Always a different one, whichever the
 /// run started in, so "the theme changed" cannot pass by accident.
@@ -26,6 +44,10 @@ let measure =
 let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
 app.appearance = NSAppearance(named: mode == "dark" ? .darkAqua : .aqua)
+
+// Printed before anything can go wrong, so the checker knows what this file was
+// meant to contain even if the render dies half way.
+print("BATTERY \(fullBattery ? "full" : "theme")")
 
 /// Records what the page posts to the app, so a test can assert on it.
 final class MessageRecorder: NSObject, WKScriptMessageHandler {
@@ -242,8 +264,24 @@ final class Runner: NSObject, WKNavigationDelegate {
                 "POSTED actions=\(Set(MessageRecorder.shared.actions).sorted().joined(separator: ",")) "
                     + "outlineHeadings=\(MessageRecorder.shared.outlineCount) "
                     + "postedWords=\(MessageRecorder.shared.wordCount) rawWords=\(rawWords)")
-            self.runFrontmatterTests()
+            self.afterDiagnostics()
         }
+    }
+
+    /// A `theme` run does the diagnostics probe and the second render, and stops
+    /// there. The second render stays in because it is nearly free and it is the
+    /// one phase below here with a per-theme half: it asks for a *different*
+    /// theme and checks the switch took, so keeping it means every palette is
+    /// still exercised as both a starting point and a destination. The rest —
+    /// the frontmatter parser, the word count, page focus, the heading clamp,
+    /// the selection gutter — reaches the same verdict whichever palette is
+    /// loaded. See `fullBattery`.
+    func afterDiagnostics() {
+        guard fullBattery else {
+            capturePNG { self.renderAgain() }
+            return
+        }
+        runFrontmatterTests()
     }
 
     /// MDVIEW_RAIL=hover hovers a tick, which a still render cannot otherwise
@@ -283,7 +321,9 @@ final class Runner: NSObject, WKNavigationDelegate {
     }
 
     func runWordCountTests() {
-        runPageTests("tools/wordcount-tests.js", label: "WORDCOUNT") { self.shoot() }
+        runPageTests("tools/wordcount-tests.js", label: "WORDCOUNT") {
+            self.capturePNG { self.checkFocusReporting() }
+        }
     }
 
     /// Evaluates one of the test files in `tools/` against the loaded page and
@@ -306,11 +346,22 @@ final class Runner: NSObject, WKNavigationDelegate {
         }
     }
 
-    func shoot() {
+    /// Grows the window to the whole document, then writes the PNG if one was
+    /// asked for.
+    ///
+    /// The resize is not optional, even when no PNG is wanted: the phases after
+    /// this one measure scrolling, and their expected numbers were established
+    /// with a viewport this tall. Only the settle-and-capture is skipped — the
+    /// 1.2s wait for the page to hold still, for an image nothing reads.
+    func capturePNG(then next: @escaping () -> Void) {
         webView.evaluateJavaScript("document.body.scrollHeight") { value, _ in
             let height = (value as? CGFloat) ?? 1200
             self.window.setContentSize(NSSize(width: 900, height: min(height + 40, 12000)))
             self.webView.frame = NSRect(x: 0, y: 0, width: 900, height: min(height + 40, 12000))
+            guard wantShots else {
+                next()
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 let config = WKSnapshotConfiguration()
                 config.rect = self.webView.bounds
@@ -326,7 +377,7 @@ final class Runner: NSObject, WKNavigationDelegate {
                         print(
                             "wrote \(out.path) \(Int(image.size.width))x\(Int(image.size.height))")
                     }
-                    self.checkFocusReporting()
+                    next()
                 }
             }
         }
@@ -824,6 +875,10 @@ final class Runner: NSObject, WKNavigationDelegate {
         webView.evaluateJavaScript(probe) { value, error in
             if let error { print("RERENDER probe error: \(error)") }
             if let s = value as? String { print("RERENDER \(s)") }
+            guard fullBattery else {
+                app.terminate(nil)
+                return
+            }
             self.checkHeadingClamp()
         }
     }

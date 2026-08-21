@@ -57,8 +57,16 @@ THEME_FOR = {"night": "night", "vellum": "vellum", "system": "system"}
 alert_colors = {}
 
 failed = False
+# Most checks below reach the same verdict whichever palette is loaded, so one
+# render runs them and the rest only probe their theme. The harness says which it
+# was, and a file that did not claim the full battery is not asked for those
+# results. See `fullBattery` in tools/snapshot.swift.
+full_battery = []
 for path in sys.argv[1:]:
     raw = open(path).read()
+    full = "BATTERY full" in raw
+    if full:
+        full_battery.append(path)
     # The page posts its outline to the app, which draws the contents panel.
     posted = [line for line in raw.splitlines() if line.startswith("POSTED ")]
     if not posted:
@@ -96,7 +104,7 @@ for path in sys.argv[1:]:
             failed = True
         if not fm.get("failures"):
             print(f"  ok   {path}: frontmatter parser (yaml, toml, lists, quotes, crlf, edge cases)")
-    else:
+    elif full:
         print(f"  FAIL {path}: no frontmatter parser results")
         failed = True
     # The word count above only shows that the frontmatter is left out. This is
@@ -110,7 +118,7 @@ for path in sys.argv[1:]:
         if not wc.get("failures"):
             print(f"  ok   {path}: word count separators (space, newlines, crlf; "
                   f"not tab or nbsp)")
-    else:
+    elif full:
         print(f"  FAIL {path}: no word count results")
         failed = True
     # The page tells the app when an input inside it has the keyboard, and the
@@ -138,7 +146,7 @@ for path in sys.argv[1:]:
         else:
             print(f"  ok   {path}: page focus reported at startup, on the find bar, "
                   f"and on a window blur")
-    else:
+    elif full:
         print(f"  FAIL {path}: no page focus results")
         failed = True
     # `n` at the end of the document, and `N` at the start, must not move. The
@@ -185,7 +193,7 @@ for path in sys.argv[1:]:
             ends = ", ".join(f"{name} holds at y={c['atBottom']} with {c['bottomHeadroom']}px "
                              f"below its last heading" for name, c in clamps.items())
             print(f"  ok   {path}: n and N stand still at the ends ({ends})")
-    else:
+    elif full:
         print(f"  FAIL {path}: no heading step results")
         failed = True
     # Selecting across blocks used to paint the tint as full-window bands, 208px
@@ -235,7 +243,7 @@ for path in sys.argv[1:]:
             print(f"  ok   {path}: selection tint stays inside the column "
                   f"({sel['insidePixels']} pixels painted between {sel['columnLeft']} and "
                   f"{sel['columnRight']}, 0 outside)")
-    else:
+    elif full:
         print(f"  FAIL {path}: no selection tint results")
         failed = True
     data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
@@ -362,6 +370,22 @@ else:
     if not failed:
         print("  ok   System theme on a dark Mac uses the dark alert accents, "
               "Paper on a dark Mac keeps the light ones")
+
+# Without this, setting MDVIEW_BATTERY=theme on every render would drop the
+# frontmatter parser, the word count, page focus, the heading clamp, the
+# selection gutter and the second render — and the suite would go green having
+# checked none of them.
+if not full_battery:
+    print("  FAIL no render ran the full battery — the frontmatter parser, the word count, "
+          "page focus, the heading clamp and the selection gutter were all skipped. "
+          "See MDVIEW_BATTERY in tools/run-tests.sh")
+    failed = True
+elif len(full_battery) > 1:
+    # Not wrong, just slow: each extra one is ~3.5s for an answer already known.
+    print(f"  ok   theme-independent checks ran in {', '.join(full_battery)} "
+          f"({len(full_battery)} runs — one is enough)")
+else:
+    print(f"  ok   theme-independent checks ran once, in {full_battery[0]}")
 
 print("RENDER TESTS FAILED" if failed else "RENDER TESTS PASSED")
 sys.exit(1 if failed else 0)

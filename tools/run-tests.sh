@@ -24,6 +24,13 @@ done
 build_harness() {
   local name="$1" dir="build/$1-tool"
   shift
+  # Nothing to do if the binary is already newer than every file that goes into
+  # it. This is what makes the common loop cheap: edit web/src or a check script,
+  # rerun, and no Swift is compiled at all.
+  if [ -x "build/$name" ] \
+    && [ -z "$(find "$@" "tools/$name.swift" -newer "build/$name" -print -quit)" ]; then
+    return
+  fi
   mkdir -p "$dir"
   cp "tools/$name.swift" "$dir/main.swift"
   swiftc -Onone -wmo -o "build/$name" "$@" "$dir/main.swift" >"build/$name.build.log" 2>&1
@@ -40,8 +47,20 @@ done
 echo "==> web bundle"
 # esbuild is the syntax check: it fails the build on a parse error. This also
 # guarantees the tests below run against the current web/src.
-./build.sh >/dev/null
-echo "  ok   bundle built from web/src"
+#
+# Skipped when the app is already newer than everything that goes into it —
+# every source of the bundle and of the binary. There is no parse error left to
+# find in a file that has not changed since it last built, and the real-app
+# probes below want that same binary either way. Getting this list wrong makes
+# tests fail against a stale build, which is loud; it cannot make them flake.
+APP="build/MDView.app/Contents/MacOS/MDView"
+APP_INPUTS=(Sources Resources web/src web/build.mjs web/package.json build.sh tools/make-icon.swift)
+if [ -x "$APP" ] && [ -z "$(find "${APP_INPUTS[@]}" -newer "$APP" -print -quit)" ]; then
+  echo "  ok   app and bundle already current"
+else
+  ./build.sh >/dev/null
+  echo "  ok   bundle built from web/src"
+fi
 
 echo "==> harnesses"
 failed=""
@@ -108,24 +127,33 @@ echo "==> renderer"
 # Every theme, not just the default: the Vellum and Colophon palettes are built
 # from color-mix(), and a token that resolves to a syntax mermaid cannot parse
 # breaks diagrams in that theme alone.
+#
+# Only the first render runs the theme-independent half of the checks — the
+# frontmatter parser, the word count, page focus, the heading clamp, the
+# selection gutter, the second render. Those reach the same verdict whichever
+# palette is loaded, and repeating them five times was ~3.5s a render for the
+# same answer. MDVIEW_BATTERY=theme runs the palette probe alone.
+# check-render.py fails if this ends up on *every* render, so the coverage
+# cannot be dropped by accident.
 ./build/snapshot Resources sample.md build/shot light >build/diag-light.txt
-./build/snapshot Resources sample.md build/shot dark  >build/diag-dark.txt
-MDVIEW_THEME=night ./build/snapshot Resources sample.md build/shot-night dark \
-  >build/diag-night.txt
-MDVIEW_THEME=vellum ./build/snapshot Resources sample.md build/shot-vellum light \
-  >build/diag-vellum.txt
+MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources sample.md build/shot dark  >build/diag-dark.txt
+MDVIEW_BATTERY=theme MDVIEW_THEME=night \
+  ./build/snapshot Resources sample.md build/shot-night dark >build/diag-night.txt
+MDVIEW_BATTERY=theme MDVIEW_THEME=vellum \
+  ./build/snapshot Resources sample.md build/shot-vellum light >build/diag-vellum.txt
 # The harness sets the webview's appearance from its own light|dark argument,
 # independent of MDVIEW_THEME, so the four runs above all have the theme and the
 # appearance agreeing. This one makes them disagree — the System theme on a dark
 # Mac — which is the case that hid the alert-colour bug.
-MDVIEW_THEME=system ./build/snapshot Resources sample.md build/shot-system dark \
-  >build/diag-system.txt
+MDVIEW_BATTERY=theme MDVIEW_THEME=system \
+  ./build/snapshot Resources sample.md build/shot-system dark >build/diag-system.txt
 python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
   build/diag-night.txt build/diag-vellum.txt build/diag-system.txt
 
 echo "==> contents rail preview sits beside its tick"
-MDVIEW_RAIL=hover MDVIEW_THEME=paper ./build/snapshot Resources sample.md build/shot-hover light \
-  >build/diag-hover.txt
+MDVIEW_BATTERY=theme MDVIEW_RAIL=hover MDVIEW_THEME=paper \
+  ./build/snapshot Resources sample.md build/shot-hover light >build/diag-hover.txt
 python3 - <<'CHECK'
 import json
 raw = open("build/diag-hover.txt").read()
@@ -143,7 +171,8 @@ print(f"  ok   preview centred on its tick ({card} vs {tick})")
 CHECK
 
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
-./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
+MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
 python3 - <<'CHECK'
 import json
 raw = open("build/diag-nofm.txt").read()
