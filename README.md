@@ -269,9 +269,9 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-About 18 seconds when nothing has changed, and low 30s after editing Swift or
-the page (both make `build.sh` rebuild the app, which is now the largest single
-cost in the run). Six things keep it there, and all of them are easy to undo by
+About 18 seconds — the same whether nothing changed or you edited the page. A
+Swift edit costs low 30s, all of it the optimised app build that a Swift edit
+genuinely needs. Six things keep it there, and all of them are easy to undo by
 accident:
 
 - **The harnesses build with `-Onone -wmo`, all at once.** Each one is the same
@@ -282,8 +282,13 @@ accident:
 - **Waits poll the page, they don't sleep.** The mermaid wait used to be a flat
   3s; the diagram is drawn in 0.1s.
 - **Nothing is rebuilt that is already newer than its inputs** — neither a
-  harness nor the app. Get that input list wrong and tests run against a stale
-  build, which is loud; it cannot make them flake.
+  harness nor the app. `build.sh` caches the compiled binary outside the bundle
+  and skips the compile when only the page changed, which is 10 of its 12
+  seconds; the bundle around it is still assembled from scratch every time, so
+  there is no stale-file class of bug to reason about. That decision lives only
+  in `build.sh` — a second copy of "what the app depends on" would be two lists
+  to hold in step. Get the inputs wrong and tests run against a stale build,
+  which is loud; it cannot make them flake.
 - **The renders run at once, and so do the theme probes.** Seven render
   processes and three app launches, all independent — nothing shared, not even a
   preferences domain. No wait got shorter: the waiting overlaps. That it holds

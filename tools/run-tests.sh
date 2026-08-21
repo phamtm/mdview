@@ -48,19 +48,12 @@ echo "==> web bundle"
 # esbuild is the syntax check: it fails the build on a parse error. This also
 # guarantees the tests below run against the current web/src.
 #
-# Skipped when the app is already newer than everything that goes into it —
-# every source of the bundle and of the binary. There is no parse error left to
-# find in a file that has not changed since it last built, and the real-app
-# probes below want that same binary either way. Getting this list wrong makes
-# tests fail against a stale build, which is loud; it cannot make them flake.
-APP="build/MDView.app/Contents/MacOS/MDView"
-APP_INPUTS=(Sources Resources web/src web/build.mjs web/package.json build.sh tools/make-icon.swift)
-if [ -x "$APP" ] && [ -z "$(find "${APP_INPUTS[@]}" -newer "$APP" -print -quit)" ]; then
-  echo "  ok   app and bundle already current"
-else
-  ./build.sh >/dev/null
-  echo "  ok   bundle built from web/src"
-fi
+# build.sh decides for itself what is already current — it skips the Swift
+# compile when Sources have not changed, which is 10 of its 12 seconds. Keeping a
+# second copy of "what the app depends on" here meant two lists to hold in step,
+# so there is only the one, in the script that does the building.
+./build.sh >/dev/null
+echo "  ok   bundle built from web/src"
 
 echo "==> harnesses"
 failed=""

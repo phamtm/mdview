@@ -10,6 +10,9 @@ VERSION="1.0"
 DEPLOY_TARGET="14.0"
 ICON_VARIANT="ink"          # ink | paper | accent — see tools/make-icon.swift
 OUT="build/${APP_NAME}.app"
+# The compiled binary is cached here, outside the bundle, so the bundle itself can
+# still be assembled from scratch on every run.
+CACHED_BIN="build/${APP_NAME}.bin"
 SDK="$(xcrun --show-sdk-path --sdk macosx)"
 ARCH="$(uname -m)"
 
@@ -33,15 +36,26 @@ elif [ ! -f Resources/bundle.js ]; then
   exit 1
 fi
 
-echo "==> compiling swift ($ARCH, macOS $DEPLOY_TARGET target)"
-swiftc \
-  -parse-as-library \
-  -O -whole-module-optimization \
-  -target "${ARCH}-apple-macos${DEPLOY_TARGET}" \
-  -sdk "$SDK" \
-  -module-name "$APP_NAME" \
-  -o "$OUT/Contents/MacOS/$APP_NAME" \
-  Sources/*.swift
+# The compile is 10 of this script's 12 seconds, and it depends on nothing but
+# Sources and this file — so a change to the page or the stylesheet does not need
+# it. Skipping is safe here in a way it would not be for the bundle: the binary is
+# cached outside $OUT, so everything else is still built clean every time and
+# there is no stale-file class of bug to reason about.
+if [ -x "$CACHED_BIN" ] && [ -z "$(find Sources build.sh -newer "$CACHED_BIN" -print -quit)" ]
+then
+  echo "==> swift unchanged, reusing $CACHED_BIN"
+else
+  echo "==> compiling swift ($ARCH, macOS $DEPLOY_TARGET target)"
+  swiftc \
+    -parse-as-library \
+    -O -whole-module-optimization \
+    -target "${ARCH}-apple-macos${DEPLOY_TARGET}" \
+    -sdk "$SDK" \
+    -module-name "$APP_NAME" \
+    -o "$CACHED_BIN" \
+    Sources/*.swift
+fi
+cp "$CACHED_BIN" "$OUT/Contents/MacOS/$APP_NAME"
 
 echo "==> copying resources"
 cp -R Resources/. "$OUT/Contents/Resources/"
