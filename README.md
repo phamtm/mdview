@@ -122,16 +122,27 @@ Add as many as you like; they come back next launch.
 
 - `⌘O` opens a file; drag a file onto the window; or `open -a MDView notes.md`
 - Markdown (`.md .markdown .mdown .mkd .mdx .markdn .rmd .qmd`), HTML (`.html
-  .htm`) and plain text (`.txt .text`). An HTML file is shown as the page it
-  already is — the markdown parser is skipped for it, because running it damages
-  what it is handed: HTML is indented, and four spaces of indent is a markdown
-  code block, so nested elements come out as `<pre><code>&lt;p&gt;…`. Everything
-  else about the view is the same: headings get a contents panel and rail ticks,
-  relative paths resolve against the file (`src`, `srcset` and `poster` alike),
-  and the sanitiser runs either way — skipping the parser does not skip that. The
-  titlebar's word count is the words of the text, counted off the same index the
-  find bar searches rather than off the source, so tags are not words. A `.txt`
-  is still read as markdown, as it always was
+  .htm`) and plain text (`.txt .text`). A `.txt` is read as markdown, as it
+  always was.
+
+  **For an HTML file the job is to display it safely, and nothing else.** It is
+  shown as the page it already is — the markdown parser is skipped, because
+  running it damages what it is handed: HTML is indented, and four spaces of
+  indent is a markdown code block, so nested elements come out as
+  `<pre><code>&lt;p&gt;…`. What still applies is everything about *showing* it:
+  the sanitiser, which is a separate step from the parser and so is not skipped
+  with it, and relative paths, which resolve against the file in all three
+  attributes that carry one (`src`, `srcset`, `poster`).
+
+  What does not apply is everything that reads a *document structure* into it —
+  no contents panel, no rail ticks, no frontmatter, no word count. An HTML file's
+  headings are as likely to be a nav bar, a sidebar or a footer as they are
+  sections: a saved page with a three-heading article produced a seven-row
+  contents panel, and nothing in the markup says which is which. "How many words"
+  has no honest answer for a page either — three attempts at one gave three
+  different numbers, and the last still disagreed with the markdown count by 30%
+  on the same prose. Both are absent rather than empty, so the titlebar and the
+  panel show nothing instead of the last document's
 - Save the file in any editor and the view refreshes, keeping your scroll position
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
@@ -429,21 +440,22 @@ Thirteen checks, in the order they run:
 - **frontmatter hidden** — with the header switched off, nothing from the block
   reaches the document, the YAML doesn't leak into the body, and the body keeps
   its headings
-- **html renders as html** — the page reports which parser it used, and that is
-  asserted rather than inferred. Two tripwires cover the flag being right while
-  the branch is wrong: `tools/sample.html` indents a paragraph four spaces, which
-  markdown turns into a code block with the tags showing, and puts `~~this~~` in
-  loose text between HTML blocks, which is where markdown still does inline work.
-  The rest of the render still has to work — one table, five headings with ids,
-  six rail ticks, and `src`, `srcset` and `poster` all resolved against the file
-  — and the sanitiser still has to strip the `<script>` and the `onerror`. The
-  word count is pinned, not just bounded: it comes off the same text index the
-  find bar searches, so it has to break `<ul><li>alpha</li><li>bravo</li>` into
-  three words and a table row into two, while keeping
-  `mark<strong>down</strong>` as one. A second fixture opens with `---`, which is
-  frontmatter in markdown and nothing in HTML — splitting it anyway ate a heading
-  in silence — and ends in a code block, so the count is pinned at the value it
-  has *before* the decorations add a language badge to it
+- **an html document is displayed, and nothing more** — three fixtures, each for
+  a way the contract can break. `tools/sample.html` covers "displayed as HTML,
+  safely": the page reports which parser it used, and two tripwires cover that
+  flag being right while the branch is wrong — a paragraph indented four spaces,
+  which markdown turns into a code block with the tags showing, and a `~~this~~`
+  in loose text between HTML blocks, which is where markdown still does inline
+  work. Then the table, the five headings with ids, `src`/`srcset`/`poster` each
+  resolved against the file, and the `<script>` and `onerror` stripped. Then the
+  "nothing more" half: no rail, no outline posted, no frontmatter header, and no
+  word count — *absent*, not zero, since the count is deliberately kept when a
+  document opens and saying nothing would leave the previous file's number up.
+  `tools/sample-dashes.html` opens with `---`, which is frontmatter in markdown
+  and nothing in HTML; splitting it anyway ate the first heading in silence, so
+  its `h1` is what is checked. `tools/sample-diagram.html` has a diagram, because
+  drawing one rebuilds the rail — a second place the outline could come back
+  from, and one only a document with a diagram reaches
 
 Two things make the window snapshot fiddly, both worked around:
 

@@ -24,6 +24,8 @@ function element(tag, className) {
  *   section as it changes, to the app.
  */
 export function createRail(post) {
+  /** Whether the document being shown has an outline at all. See update(). */
+  let outlined = true;
   const zone = element("div", "rail-zone");
   const ticks = element("div", "rail-ticks");
   const card = element("div", "rail-card");
@@ -158,15 +160,23 @@ export function createRail(post) {
 
   window.addEventListener("scroll", trackScroll, { passive: true });
   window.addEventListener("resize", () => {
-    headings = readOutline(document.getElementById("doc"));
+    headings = outlined ? readOutline(document.getElementById("doc")) : [];
     trackScroll();
   });
 
   return {
-    /** Called after every render. */
-    update(root) {
-      headings = readOutline(root);
-      zone.hidden = headings.length < 2;
+    /**
+     * Called after every render.
+     *
+     * `hasOutline` false means this document has no outline of its own — an HTML
+     * file, whose headings are as likely to be a nav bar or a page footer as
+     * they are sections. The rail hides and the contents panel is told there is
+     * nothing, rather than being left showing the last document's headings.
+     */
+    update(root, hasOutline = true) {
+      outlined = hasOutline;
+      headings = hasOutline ? readOutline(root) : [];
+      zone.hidden = !hasOutline || headings.length < 2;
       buildTicks();
       current = -1;
       trackScroll();

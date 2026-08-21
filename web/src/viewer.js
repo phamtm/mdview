@@ -8,7 +8,7 @@ import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 import { createRail } from "./rail.js";
 import { countWords, frontmatterHeader, panelFields, splitFrontmatter } from "./frontmatter.js";
-import { createFindBar, documentText } from "./find.js";
+import { createFindBar } from "./find.js";
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
 (function () {
@@ -373,7 +373,9 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       }
     }
     // Diagrams change the height of the page, so the outline's offsets are stale.
-    if (token === renderToken) rail.update(elDoc);
+    // Same decision as the first call: re-reading unconditionally would give an
+    // HTML document the outline it was just denied.
+    if (token === renderToken) rail.update(elDoc, appliedFormat !== "html");
   }
 
   /**
@@ -560,30 +562,33 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       ? { body: payload.markdown || "", fields: [] }
       : splitFrontmatter(payload.markdown || "");
 
-    // The titlebar's word count and the fields for its disclosure. The parser
-    // lives here rather than in Swift, which would be two implementations to
-    // keep in step. Separators are space and newline — a tab deliberately is not
-    // one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it. Title
-    // and subtitle are left out, already being on the page as the document's own
-    // head.
-    const postCount = (words) =>
-      post({ action: "frontmatter", words, fields: panelFields(split.fields) });
-
-    // Markdown source is its own prose, so it is counted before anything is
-    // parsed — which is why this message has always gone first: a throw in
-    // marked or DOMPurify still leaves the titlebar a count and its fields.
+    // The titlebar's word count and the fields for its disclosure. The
+    // frontmatter parser lives here rather than in Swift, which would be two
+    // implementations to keep in step. Separators are space and newline — a tab
+    // deliberately is not one, so `a\tb` stays one word, and
+    // tools/wordcount-tests.js pins it. Title and subtitle are left out, already
+    // being on the page as the document's own head.
     //
-    // HTML source is not prose: counting it raw makes a word of every tag. The
-    // answer is in the built document, so an HTML count waits for one and is
-    // taken from documentText() — the same index the find bar searches, which
-    // already knows where a word can end. Two earlier attempts at this each
-    // invented their own answer and each got a different case wrong, which is
-    // why it is now shared rather than written again.
+    // An HTML document gets neither: no fields, because frontmatter is a
+    // markdown convention, and no count, because "how many words" has no honest
+    // answer for a page — three attempts at one produced three different numbers
+    // and the last of them still disagreed with the markdown count by 30% on the
+    // same prose. `words` is therefore absent rather than zero: Swift reads it as
+    // an optional and leaves the titlebar's second row empty. Absent and not
+    // simply unsent, because the count is deliberately not cleared when a
+    // document opens — saying nothing would leave the previous file's number up.
     //
-    // The cost of waiting is small and worth naming: if the render throws, the
-    // titlebar keeps the count of the file that was open before, the same as it
-    // does for the moment between any render starting and finishing.
-    if (!isHtml) postCount(countWords(split.body));
+    // Sent before anything is parsed either way, so a throw in marked or
+    // DOMPurify still leaves the titlebar right.
+    post(
+      isHtml
+        ? { action: "frontmatter", fields: [] }
+        : {
+            action: "frontmatter",
+            words: countWords(split.body),
+            fields: panelFields(split.fields),
+          }
+    );
 
     // An HTML file already *is* the markup, so the markdown parser is skipped.
     // What it damages is block-level: HTML is indented, and four spaces of
@@ -595,11 +600,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // why skipping the parser cannot also skip the stripping of <script>.
     const dirty = isHtml ? split.body : marked.parse(split.body);
     elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
-
-    // Here, and not further down: the decorations below add text of their own,
-    // and the language badge on a code figure ("JS") is not one of the things
-    // documentText() skips.
-    if (isHtml) postCount(countWords(documentText(elDoc)));
 
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
@@ -629,7 +629,11 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // getBoundingClientRect forces layout, so heading offsets are already real —
     // no need to wait for a frame, which never arrives when the window is
     // offscreen and rAF is throttled.
-    rail.update(elDoc);
+    // No outline for an HTML file. Its headings are as likely to be a nav bar,
+    // a sidebar or a footer as they are the document's sections — a saved page
+    // with a three-heading article gave a seven-row contents panel — and there
+    // is no way to tell which is which from the markup.
+    rail.update(elDoc, !isHtml);
     // The find bar's ranges point into the document that was just replaced.
     find.refresh();
     drawDiagrams(token);

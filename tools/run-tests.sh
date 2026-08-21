@@ -168,6 +168,8 @@ start_render build/diag-html.txt env MDVIEW_BATTERY=theme \
   ./build/snapshot Resources tools/sample.html build/html light
 start_render build/diag-html-dashes.txt env MDVIEW_BATTERY=theme \
   ./build/snapshot Resources tools/sample-dashes.html build/html-dashes light
+start_render build/diag-html-diagram.txt env MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources tools/sample-diagram.html build/html-diagram light
 
 for entry in "${renders[@]}"; do
   wait "${entry%%:*}" || { echo "  FAIL ${entry#*:}: the render exited non-zero"; exit 1; }
@@ -209,7 +211,7 @@ print("  ok   header hidden, body intact" if not problems else "FRONTMATTER-OFF 
 raise SystemExit(1 if problems else 0)
 CHECK
 
-echo "==> an html document renders as html, not as markdown"
+echo "==> an html document is displayed, and nothing more"
 python3 - <<'CHECK'
 import json
 
@@ -223,89 +225,90 @@ def read(path):
 problems = []
 data, fields = read("build/diag-html.txt")
 
-# The page says which parser it used, so this is asserted rather than inferred.
+# --- it is displayed as html -------------------------------------------------
+# The page reports which parser it used, which catches Swift sending the wrong
+# format. It cannot catch the branch itself going wrong, being read from the same
+# flag the branch reads, so two tripwires cover that: tools/sample.html indents a
+# paragraph four spaces, which markdown turns into a code block with the tags
+# showing, and puts `~~this~~` in loose text between HTML blocks, which is where
+# markdown still does inline work.
 if data["appliedFormat"] != "html":
     problems.append(f"page rendered it as {data['appliedFormat']!r}")
-# And two independent tripwires for the parser having run anyway, because the
-# flag above could be right while the branch is wrong. tools/sample.html indents
-# a paragraph four spaces, which markdown turns into a code block with the tags
-# showing; and it puts `~~this~~` in loose text between HTML blocks, which is
-# where markdown still does inline work.
 if data["codeFigures"]:
     problems.append(f"{data['codeFigures']} code figure(s) — the indented paragraph went through marked")
 if data["strikethrough"]:
     problems.append(f"{data['strikethrough']} strikethrough(s) — loose text went through marked")
-
-# The rest of the render still has to work.
 if data["tables"] != 1: problems.append(f"{data['tables']} tables, want 1")
-if data["headings"] != 5: problems.append(f"{data['headings']} h2s, want 5")
+if data["headings"] != 5: problems.append(f"{data['headings']} h2s in the document, want 5")
 if data["headingIds"] != 5: problems.append(f"{data['headingIds']} h2s carry an id, want 5")
-if data["railTicks"] != 6: problems.append(f"rail has {data['railTicks']} ticks, want 6")
-# The first image in the document is the plain `src` one. The `srcset` one after
-# it is the case that used to break: the spec prefers srcset over src, so leaving
-# it unresolved pointed inside the app bundle and lost a picture that resolving
-# src alone had got right.
+
+# --- safely ------------------------------------------------------------------
+# Both formats go through DOMPurify, which is why skipping the parser cannot also
+# skip the stripping.
+if data["scriptTagsInDoc"]: problems.append(f"{data['scriptTagsInDoc']} script tag(s) survived")
+if data["onerrorAttrs"]: problems.append(f"{data['onerrorAttrs']} onerror attribute(s) survived")
+if data["pwned"]: problems.append("injected script ran")
+
+# Local paths resolve against the file, in all three attributes that carry one.
+# srcset matters most and is the least obvious: the spec prefers it over src, so
+# leaving it relative used to *lose* a picture that resolving src alone got right.
 if data["imgLoaded"] != 220: problems.append(f"first image is {data['imgLoaded']}px wide, want 220")
-# Two of the three images must paint: the `src` one and the `srcset` one. The
-# third points at a file that is not there on purpose, to fire the onerror the
-# sanitiser has to have stripped.
-if data["imagesPainted"] != 2:
-    problems.append(f"{data['imagesPainted']} of 2 images painted")
-# The srcset has to have been rewritten to an absolute path under the document's
-# own directory. Asserted on the attribute and not on whether the picture
-# appeared: `../sample-image.png` reaches the same file from the page's directory
-# as from the fixture's, so a load proves nothing here.
 for srcset in data["srcsetAttrs"].split(" | "):
     if not srcset.startswith("file://"):
-        problems.append(f"srcset is still relative ({srcset!r}) — it resolves against "
-                        "the page inside the app bundle, and the spec prefers it over src")
+        problems.append(f"srcset is still relative ({srcset!r})")
     elif "/Resources/" in srcset:
         problems.append(f"srcset resolved into the app bundle ({srcset!r})")
-    # One candidate, not two. A URL may contain a comma — `?w=100,200` is a legal
-    # query — so splitting the list on commas broke a valid srcset in half.
-    if len(srcset.split(" 1x")) - 1 != 1 or srcset.count("file://") != 1:
+    # One candidate, not two: a URL may contain a comma, `?w=100,200` being a
+    # legal query, so splitting the list on commas broke a valid srcset in half.
+    if srcset.count("file://") != 1:
         problems.append(f"srcset is not one candidate ({srcset!r}) — a comma inside "
                         "the URL was treated as a candidate separator")
 if not data["posterAttr"].startswith("file://"):
     problems.append(f"poster is still relative ({data['posterAttr']!r})")
 
-# Sanitising is the half that does not change between the two formats.
-if data["scriptTagsInDoc"]: problems.append(f"{data['scriptTagsInDoc']} script tag(s) survived")
-if data["onerrorAttrs"]: problems.append(f"{data['onerrorAttrs']} onerror attribute(s) survived")
-if data["pwned"]: problems.append("injected script ran")
+# --- and nothing more --------------------------------------------------------
+# No outline, no rail, no frontmatter, no word count. An HTML file's headings are
+# as likely to be a nav bar or a footer as they are sections — a saved page with a
+# three-heading article gave a seven-row contents panel — and "how many words" has
+# no honest answer for a page.
+if data["railTicks"]: problems.append(f"rail has {data['railTicks']} ticks, want none")
+if not data["railHidden"]: problems.append("the rail is showing for an html document")
+if int(fields.get("outlineHeadings", -1)):
+    problems.append(f"posted an outline of {fields.get('outlineHeadings')} rows")
+if data["frontmatterTitle"] != "none" or data["frontmatterSubtitle"] != "none":
+    problems.append(f"a frontmatter header was drawn "
+                    f"({data['frontmatterTitle']!r}/{data['frontmatterSubtitle']!r})")
+# -1 is the harness's "never posted a count". The count must be *absent* rather
+# than zero or unsent: Swift reads it as an optional and deliberately keeps the
+# last one on open, so saying nothing would leave the previous file's number up.
+if int(fields.get("postedWords", -1)) != -1:
+    problems.append(f"posted a word count of {fields.get('postedWords')} for an html file")
 
-# Pinned, not just "less than the file". The count comes off the same text index
-# the find bar searches, so it has to break at a block edge — the tight
-# `<ul><li>alpha</li><li>bravo</li>` is three words, and a table row is two — and
-# hold a phrase together, `mark<strong>down</strong>` being one word and not two.
-# Both are in the fixture. A bound alone passed two different versions of this bug
-# and an earlier pin locked a third one in.
-words, raw_words = int(fields.get("postedWords", -1)), int(fields.get("rawWords", -1))
-if (words, raw_words) != (183, 275):
-    problems.append(f"word count is {words} of {raw_words}, want 183 of 275")
-
-# A `---` first line is frontmatter in markdown and nothing at all in HTML.
-# Splitting one anyway ate the first heading and paragraph in silence.
-dashes, dash_fields = read("build/diag-html-dashes.txt")
+# --- a `---` first line is frontmatter in markdown and nothing in HTML -------
+# Splitting it anyway ate the first heading and the paragraph under it, silently.
+dashes, _ = read("build/diag-html-dashes.txt")
 if dashes["appliedFormat"] != "html":
     problems.append(f"dashes fixture rendered as {dashes['appliedFormat']!r}")
-if int(dash_fields.get("outlineHeadings", -1)) != 2:
-    problems.append(f"a --- first line cost the html file a heading "
-                    f"({dash_fields.get('outlineHeadings')} of 2 left)")
-# 19 and not 20: the fixture ends in a code block, and the language badge the
-# decorations add to it ("JS") is text the count must not see. Reading the
-# document after decorating it counts that badge.
-if int(dash_fields.get("postedWords", -1)) != 19:
-    problems.append(f"dashes fixture counts {dash_fields.get('postedWords')} words, want 19 — "
-                    "20 means the count was taken after the decorations")
+if dashes["h1s"] != 1:
+    problems.append(f"a --- first line cost the html file its h1 ({dashes['h1s']} left) — "
+                    "the frontmatter split was applied to a format that has none")
+
+# --- drawing a diagram rebuilds the rail, which is a second way back ---------
+diagram, _ = read("build/diag-html-diagram.txt")
+if diagram["mermaidSvg"] != 1:
+    problems.append(f"the diagram fixture drew {diagram['mermaidSvg']} diagrams, want 1 — "
+                    "without one it cannot reach the rebuild it exists to check")
+if diagram["railTicks"] or not diagram["railHidden"]:
+    problems.append(f"the rail came back after the diagram redrew "
+                    f"({diagram['railTicks']} ticks) — the rebuild is not gated")
 
 for p in problems: print(f"  FAIL {p}")
 if problems:
     print("HTML TESTS FAILED")
     raise SystemExit(1)
-print(f"  ok   parsed as html (no code figure, no strikethrough), {data['tables']} table, "
-      f"{data['headings']} headings, src/srcset/poster resolved, sanitised, "
-      f"{words} words of text not {raw_words} of source, and a --- first line costs it nothing")
+print(f"  ok   html displayed ({data['headings']} headings, {data['tables']} table, "
+      f"src/srcset/poster resolved), sanitised, and nothing more: no outline, no rail, "
+      f"no frontmatter, no word count")
 CHECK
 
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist

@@ -163,9 +163,15 @@ final class Runner: NSObject, WKNavigationDelegate {
     /// The deadline is the old flat wait: if the page never settles we carry on
     /// and let the diagnostics report the shortfall rather than hanging.
     func waitForDocument(start: Date) {
-        let wantedDiagrams = markdown.components(separatedBy: "```mermaid").count - 1
+        // How many diagrams to expect is asked of the page, not counted in the
+        // source. Counting ```mermaid fences was markdown's spelling of a
+        // diagram: an HTML document says `class="language-mermaid"` instead, so
+        // the wait was for zero and the probe read the page before mermaid had
+        // drawn anything — about half the time. A fence quoted inside an example
+        // block had the opposite problem, being counted and never drawn.
         let query = """
             JSON.stringify({
+              holders: document.querySelectorAll('#doc figure.diagram .mermaid').length,
               svgs: document.querySelectorAll('#doc .mermaid svg').length,
               loading: Array.from(document.querySelectorAll('#doc img'))
                 .filter(function (img) { return !img.complete; }).length
@@ -173,12 +179,13 @@ final class Runner: NSObject, WKNavigationDelegate {
             """
         webView.evaluateJavaScript(query) { value, _ in
             let state = (value as? String) ?? ""
+            let wantedDiagrams = Self.number(in: state, key: "holders")
             let drawn = Self.number(in: state, key: "svgs")
             let loading = Self.number(in: state, key: "loading")
             let settled = drawn >= wantedDiagrams && loading == 0
             // A probe that cannot be read would otherwise wait out the deadline
             // and say nothing, which is the kind of silent wait this replaced.
-            if drawn < 0 || loading < 0 {
+            if wantedDiagrams < 0 || drawn < 0 || loading < 0 {
                 print("SETTLE probe unreadable: \(state)")
                 self.driveRail()
                 return
@@ -205,6 +212,10 @@ final class Runner: NSObject, WKNavigationDelegate {
         let probe = """
             JSON.stringify({
               headings: document.querySelectorAll('#doc h2').length,
+              // The document's own h1s. The outline used to stand in for this
+              // when checking that a `---` first line costs an HTML file
+              // nothing, and an HTML file has no outline to ask any more.
+              h1s: document.querySelectorAll('#doc h1:not(.fm-title)').length,
               headingIds: document.querySelectorAll('#doc h2[id]').length,
               codeFigures: document.querySelectorAll('#doc figure.code').length,
               highlighted: document.querySelectorAll('#doc figure.code code .hljs-keyword, #doc figure.code code .hljs-string').length,
