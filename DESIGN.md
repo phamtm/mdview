@@ -134,9 +134,11 @@ Implementation notes that are easy to trip over:
   theme on a dark Mac are two different selectors reaching the same palette, so a
   dark-only override written once only lands on one of them — the other keeps the
   light value on a near-black ground. Two rule families need the twin: code text
-  (`figure.code code`) and the four coloured alerts. The alerts were missing
-  theirs, and `.alert-label` is 10px text in that colour, so it measured 2.2:1
-  where Colophon gets 5.7:1. The guard matters as much as the rule: without
+  (`figure.code code`) and all five alerts. The alerts were missing theirs, and
+  `.alert-label` is 10px text in that colour, so it measured 2.2:1 where Colophon
+  gets 5.7:1. Note came later for the same reason: it carries the plain accent,
+  pinned to the light themes' `accent-600`, which is 3.6:1 on the dark ground — it
+  takes the theme's own `--accent` there instead, for 7.8:1. The guard matters as much as the rule: without
   `:not([data-theme])` it would leak into Paper and Vellum, and only *look*
   right because the window's appearance is pinned on the Swift side.
 - **The render harness picks the webview's appearance from its own `light|dark`

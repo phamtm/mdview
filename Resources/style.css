@@ -715,6 +715,13 @@ body {
   --alert: #a4342b;
 }
 
+/* Note carries the plain accent, so on a dark ground it takes the theme's own
+   --accent (accent-400) rather than the light themes' accent-600, which measured
+   3.6:1 against the near-black page. 7.8:1 now, and one ramp step off warning so
+   the two golds stay apart — the same order they sit in on a light ground. */
+:root[data-theme="night"] .prose .alert-note {
+  --alert: var(--accent);
+}
 :root[data-theme="night"] .prose .alert-tip {
   --alert: #8fae84;
 }
@@ -727,12 +734,14 @@ body {
 :root[data-theme="night"] .prose .alert-caution {
   --alert: #d9847a;
 }
-/* Same four again for the System theme on a dark Mac — without this the page
+/* The same five again for the System theme on a dark Mac — without this the page
    keeps the light accents on a near-black ground, and `.alert-label` is 10px
    text in that colour. The `:not([data-theme])` guard is what keeps it out of
-   Paper and Vellum. `.alert-note` needs no twin: it is pinned to --accent-600
-   in every theme. */
+   Paper and Vellum. */
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .prose .alert-note {
+    --alert: var(--accent);
+  }
   :root:not([data-theme]) .prose .alert-tip {
     --alert: #8fae84;
   }

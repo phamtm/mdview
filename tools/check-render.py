@@ -197,7 +197,7 @@ for path in sys.argv[1:]:
 # light alert accents on a near-black ground — 2.2:1 on 10px label text. The
 # stylesheet needs a `:root:not([data-theme])` twin inside the
 # prefers-color-scheme block for every `[data-theme="night"]` rule.
-DARK_ALERTS = ("tip", "important", "warning", "caution")
+DARK_ALERTS = ("note", "tip", "important", "warning", "caution")
 if "system" not in alert_colors or "night" not in alert_colors:
     print("  FAIL no System-theme-on-dark render to check the alert accents against")
     failed = True
