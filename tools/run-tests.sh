@@ -6,13 +6,56 @@ mkdir -p build
 
 # Every harness has top-level code, so it can't compile alongside MDViewApp.swift
 # (which owns @main). One list, rather than four that drift when a file is added.
-SRC=$(ls Sources/*.swift | grep -v 'MDViewApp.swift')
+SRC=()
+for file in Sources/*.swift; do
+  [ "$file" = "Sources/MDViewApp.swift" ] || SRC+=("$file")
+done
+
+# Each harness is the same ~16 files plus its own main.swift, and building them
+# one at a time with -O was 48s — more than every test in this file put together.
+# Two things fix it, and neither changes what is checked:
+#   -Onone -wmo   nothing here measures throughput, and the runs come out the
+#                 same speed either way, so optimising the code is pure cost.
+#                 -wmo then makes it a single frontend job: 8.0s -> 2.7s.
+#   all at once   the compiles are independent, so they overlap. Together with
+#                 build.sh below, the whole compile phase is ~6s.
+# The animation sampler is the one to watch here, since it asserts on timing —
+# it passes unoptimised, with the same sample counts.
+build_harness() {
+  local name="$1" dir="build/$1-tool"
+  shift
+  mkdir -p "$dir"
+  cp "tools/$name.swift" "$dir/main.swift"
+  swiftc -Onone -wmo -o "build/$name" "$@" "$dir/main.swift" >"build/$name.build.log" 2>&1
+}
+
+# The watcher harness takes one source file, not the whole app.
+build_harness test-watcher Sources/FileWatcher.swift &
+compiling="$!"
+for harness in test-workspace test-shortcuts test-key-delivery test-panel-animation snapshot; do
+  build_harness "$harness" "${SRC[@]}" &
+  compiling="$compiling $!"
+done
 
 echo "==> web bundle"
 # esbuild is the syntax check: it fails the build on a parse error. This also
 # guarantees the tests below run against the current web/src.
 ./build.sh >/dev/null
 echo "  ok   bundle built from web/src"
+
+echo "==> harnesses"
+failed=""
+for pid in $compiling; do
+  wait "$pid" || failed="yes"
+done
+if [ -n "$failed" ]; then
+  echo "  FAIL a harness did not compile:"
+  for log in build/*.build.log; do
+    grep -q 'error:' "$log" && { echo "  --- $log"; grep -A3 'error:' "$log" | head -20; }
+  done
+  exit 1
+fi
+echo "  ok   all harnesses built"
 
 # "auto" does not mean "no animation": it inherits `scroll-behavior: smooth`
 # from style.css rather than overriding it, which is how every keyboard motion
@@ -33,27 +76,15 @@ echo "==> payload contract"
 ./tools/check-payload.sh
 
 echo "==> file watcher"
-# swiftc only allows top-level code in a file called main.swift
-cp tools/test-watcher.swift build/main.swift
-swiftc -O -o build/test-watcher Sources/FileWatcher.swift build/main.swift
 ./build/test-watcher
 
 echo "==> sidebar tree"
-mkdir -p build/workspace-tool
-cp tools/test-workspace.swift build/workspace-tool/main.swift
-swiftc -O -o build/test-workspace $SRC build/workspace-tool/main.swift
 ./build/test-workspace
 
 echo "==> shortcut table and resolver"
-mkdir -p build/shortcuts-tool
-cp tools/test-shortcuts.swift build/shortcuts-tool/main.swift
-swiftc -O -o build/test-shortcuts $SRC build/shortcuts-tool/main.swift
 ./build/test-shortcuts
 
 echo "==> key delivery (offscreen window, synthesised events)"
-mkdir -p build/keys-tool
-cp tools/test-key-delivery.swift build/keys-tool/main.swift
-swiftc -O -o build/test-key-delivery $SRC build/keys-tool/main.swift
 ./build/test-key-delivery
 
 echo "==> panels slide, from every path (offscreen window, sampled widths)"
@@ -61,9 +92,6 @@ echo "==> panels slide, from every path (offscreen window, sampled widths)"
 # and counts the values between the two ends. It is here because the *thing* it
 # catches is silent: the titlebar buttons toggled the panels with no animation at
 # all while the keys animated, and nothing in the code read wrong.
-mkdir -p build/anim-tool
-cp tools/test-panel-animation.swift build/anim-tool/main.swift
-swiftc -O -o build/test-panel-animation $SRC build/anim-tool/main.swift
 ./build/test-panel-animation
 
 echo "==> window chrome (real app)"
@@ -72,20 +100,14 @@ echo "==> window chrome (real app)"
 echo "==> theme reaches the document (real app)"
 ./tools/check-theme.sh
 
-echo "==> window layout"
-mkdir -p build/window-tool
-cp tools/snapshot-window.swift build/window-tool/main.swift
-swiftc -O -o build/snapshot-window $SRC build/window-tool/main.swift
-./build/snapshot-window build/window-light.png light
-./build/snapshot-window build/window-dark.png dark
+# The full-window offscreen render moved to tools/shots.sh. It only ever wrote
+# PNGs that nothing read, so it could not fail — 16s a run for no coverage. What
+# the real window looks like is check-window-chrome.sh above.
 
 echo "==> renderer"
 # Every theme, not just the default: the Vellum and Colophon palettes are built
 # from color-mix(), and a token that resolves to a syntax mermaid cannot parse
 # breaks diagrams in that theme alone.
-mkdir -p build/render-tool
-cp tools/snapshot.swift build/render-tool/main.swift
-swiftc -O -o build/snapshot $SRC build/render-tool/main.swift
 ./build/snapshot Resources sample.md build/shot light >build/diag-light.txt
 ./build/snapshot Resources sample.md build/shot dark  >build/diag-dark.txt
 MDVIEW_THEME=night ./build/snapshot Resources sample.md build/shot-night dark \
@@ -140,7 +162,7 @@ CHECK
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist
 # named after each executable. cfprefsd owns those files and rewrites them after a
 # process exits, so ask the daemon to drop the domains rather than deleting files.
-for domain in test-workspace snapshot-window snapshot test-panel-animation; do
+for domain in test-workspace snapshot test-panel-animation; do
   defaults delete "$domain" >/dev/null 2>&1 || true
   rm -f "$HOME/Library/Preferences/$domain.plist"
 done

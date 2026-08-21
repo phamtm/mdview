@@ -269,7 +269,26 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-Thirteen checks, in the order they run:
+About 70 seconds. Two things keep it there, and both are easy to undo by
+accident:
+
+- The harnesses build with `-Onone -wmo`, all at once. Each one is the same ~16
+  source files plus its own `main.swift`, so building them one at a time with
+  `-O` was 48s — more than every check in the suite put together. Nothing here
+  measures throughput and the runs are the same speed either way, so optimising
+  is pure cost.
+- Waits on the page poll, they don't sleep. The mermaid wait used to be a flat
+  3s; the diagram is actually drawn in 0.1s.
+
+The full-window offscreen render is not part of the suite. It only ever wrote
+PNGs that nothing read, so it could never fail — 16s a run for no coverage. It
+lives on its own, for when you want to look at it:
+
+```bash
+./tools/shots.sh
+```
+
+Twelve checks, in the order they run:
 
 - **web bundle** — esbuild is the syntax check, since it fails the build on a
   parse error, and it means everything below runs against the current `web/src`.
@@ -309,8 +328,6 @@ Thirteen checks, in the order they run:
   appearance follows the theme rather than the OS (native scrollbars take their
   knob colour from it, so a light theme under a dark macOS drew a white knob),
   and that the window frame and the overscroll area are painted to match
-- **window layout** — the whole window rendered offscreen to
-  `build/window-{light,dark}.png`
 - **renderer** — a headless render of `sample.md` produces the expected headings,
   code blocks, tables, task lists, diagram, resolved image path, five alert kinds
   and footnotes, and strips the `<script>` planted in that file. Run in every

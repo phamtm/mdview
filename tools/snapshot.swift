@@ -117,8 +117,33 @@ final class Runner: NSObject, WKNavigationDelegate {
         guard let call = payload.renderCall else { print("payload encode failed"); return }
         webView.evaluateJavaScript(call + " 'ok'") { _, error in
             if let error { print("render error: \(error)") }
-            // Give lazily-loaded mermaid time to draw.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.driveRail() }
+            // mermaid is loaded lazily, so its diagrams appear some time after
+            // the render call returns. This used to be a flat 3s wait, which was
+            // 30x longer than it takes: ask the page instead, every 50ms.
+            self.waitForDiagrams(start: Date())
+        }
+    }
+
+    /// Polls until every ```mermaid fence in the document has drawn an svg, then
+    /// carries on. The deadline is the old flat wait: if the diagrams never
+    /// arrive we continue anyway and let the diagnostics report the shortfall,
+    /// rather than hanging.
+    func waitForDiagrams(start: Date) {
+        let wanted = markdown.components(separatedBy: "```mermaid").count - 1
+        guard wanted > 0 else {
+            driveRail()
+            return
+        }
+        webView.evaluateJavaScript("document.querySelectorAll('#doc .mermaid svg').length") {
+            value, _ in
+            let drawn = (value as? Int) ?? 0
+            if drawn >= wanted || Date().timeIntervalSince(start) > 3.0 {
+                self.driveRail()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.waitForDiagrams(start: start)
+                }
+            }
         }
     }
 
