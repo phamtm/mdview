@@ -54,6 +54,7 @@ npm run watch             # rebuild on save, then ⌥⌘R in the app
 | --- | --- |
 | `web/src/viewer.js` | The renderer: markdown → DOM, post-processing, find bar |
 | `web/src/rail.js` | The tick rail beside the column, and it posts the outline to the app |
+| `web/src/motion.js` | One constant: keyboard scrolling jumps, mouse-driven jumps animate |
 | `web/src/mermaid.js` | Diagram entry point, built as its own file |
 | `web/build.mjs` | esbuild config for the two bundles |
 | `Resources/bundle.js` | **Generated.** Don't edit |
@@ -110,7 +111,8 @@ Add as many as you like; they come back next launch.
   and disappear on their own — no refresh needed
 - Only markdown-ish files are listed. `View ▸ Show All Files in Sidebar` lifts that
 - Right-click for reveal in Finder, copy path, and remove folder
-- `⌘B` hides and shows the sidebar; drag its right edge to resize (the width sticks)
+- `h`, `⌘[` or `⌘B` hides and shows the sidebar; drag its right edge to resize
+  (the width sticks)
 
 ### Document
 
@@ -121,7 +123,7 @@ Add as many as you like; they come back next launch.
 - Relative image paths resolve against the file's own folder
 - Ticks down the left of the column show where you are; hover one to see its
   heading, click to jump there
-- `⌥⌘O` opens a contents panel on the right listing the document's headings —
+- `l`, `⌘]` or `⌥⌘O` opens a contents panel on the right listing the headings —
   `#`, `##` and `###`; deeper ones are left out. Drag its left edge to resize —
   like the sidebar, the width sticks, and neither panel is allowed to squeeze the
   document below its minimum width
@@ -133,21 +135,31 @@ MDView under "Open with", then "Change All".
 
 | | |
 | --- | --- |
+| `j` / `k` | Half a page down / up |
+| `g` / `G` | Top / end of the document |
+| `n` / `N` | Next / previous heading |
+| `/` or `⌘F` | Find in document |
+| `?` | Every shortcut there is, in a panel |
+| `Esc` | Close that panel, or the find bar |
+| `h`, `⌘[` or `⌘B` | Toggle sidebar |
+| `l`, `⌘]` or `⌥⌘O` | Toggle the contents panel |
 | `⌘O` | Open file |
 | `⇧⌘O` | Add folder to sidebar |
-| `⌘B` | Toggle sidebar |
-| `⌥⌘O` | Toggle the contents panel |
 | `⌘,` | Settings: theme, type size, alignment, column width |
 | `⌘R` | Reload document |
 | `⌥⌘R` | Reload renderer (after a `web/` rebuild) |
-| `⌘F` | Find in document |
 | `⌘I` | Front matter of the open file |
 | `⌥⌘C` | Copy the document's markdown source |
 | `⌘=` / `⌘-` / `⌘0` | Zoom in / out / reset |
+| `Help ▸ Keyboard Shortcuts` | The same panel as `?` |
 | `View ▸ Show Frontmatter` | Show or hide the metadata header |
 | `File ▸ Copy File Path` | Path of the open file |
 | `⇧⌘R` | Reveal in Finder |
 | `⌘P` | Print |
+
+The plain keys work while you are reading and stand down while you are typing —
+in the sidebar's search box or the find bar, they are just letters. A key nothing
+is bound to does nothing at all, deliberately: no beep, and nothing typed.
 
 ## Design
 
@@ -214,7 +226,10 @@ rebuild, `killall Dock` forces it to re-read.
 | `Sources/FileWatcher.swift` | Watches the file for changes, including the temp-file-plus-rename that editors use when saving |
 | `Sources/ViewerWebView.swift` | Hosts the WebKit view, routes menu commands and link clicks, accepts dropped files |
 | | The navigation policy is load-bearing: WebKit reports in-page `#fragment` jumps as link activations on `viewer.html`, so they must be allowed, while everything else must be cancelled — navigating away destroys `window.mdview` and every later render fails silently |
-| `Sources/Notifications.swift` | The one list of `mdv.*` channels: most are handled by the web view, the panel toggles by `ViewerLayout` |
+| `Sources/Notifications.swift` | The one list of `mdv.*` channels: most are handled by the web view, the panel toggles and the overlays by `ViewerLayout` |
+| `Sources/Shortcuts.swift` | The one table of every key binding, and the pure rule that says what a keystroke means right now |
+| `Sources/ShortcutMonitor.swift` | The AppKit half: key events in, actions out. It also swallows bare keys nothing is bound to, so they don't beep |
+| `Sources/ShortcutsOverlay.swift` | The `?` panel, drawn entirely from that table |
 | `Sources/MDViewApp.swift` | App entry point, menu bar, launch behaviour |
 | `Sources/ViewerLayout.swift` | The window: the hand-built split, the titlebar band, the panel resize handles |
 | `Sources/WindowChrome.swift` | The AppKit side of the window: hidden titlebar, transparency, background — and the dump `tools/check-window-chrome.sh` reads |
@@ -254,16 +269,38 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-Ten checks, in the order they run:
+Thirteen checks, in the order they run:
 
 - **web bundle** — esbuild is the syntax check, since it fails the build on a
-  parse error, and it means everything below runs against the current `web/src`
+  parse error, and it means everything below runs against the current `web/src`.
+  Plus a grep for `behavior: "auto"`, which reads like "no animation" and is not:
+  it inherits `scroll-behavior: smooth` from the stylesheet instead of overriding
+  it, which is how every keyboard scroll came to animate and lose most of its
+  travel
 - **payload contract** — every `payload.*` key the page reads is declared in
   `RenderPayload.swift`, and the harness goes through that type rather than
   hand-rolling a dictionary. The two sides drifted once and the tests missed it
 - **file watcher** — survives the temp-file-plus-rename that editors do on save
 - **sidebar tree** — sorts folders first, filters non-markdown files, expands down
   to a revealed file, and notices files appearing and disappearing on disk
+- **shortcut table and resolver** — what every key means, and what it means while
+  something else has the keyboard: the sidebar's search box, the page's find bar,
+  each overlay, another window, Caps Lock on. The expectations are written out by
+  hand rather than read from the table, since a test that derives them from the
+  thing it is testing cannot fail. Also that the table stays a table — no
+  duplicate strokes, no untitled rows, every action bound to something
+- **key delivery** — the same rules through a real (offscreen) window and
+  synthesised events, which the pure resolver cannot cover: `j` reaches a focused
+  text field and fires nothing, `⌘]` still fires while you type, an unbound letter
+  is swallowed instead of beeped at, and space still reaches the responder chain
+  because that is how the page turns
+- **panels slide, from every path** — samples the drawn panel width every 10ms
+  through a toggle, from the titlebar button and from the menu, and counts the
+  widths in between — none at all means it jumped. It is here because the failure
+  is silent: the buttons toggled the panels with no animation at all while the
+  keys animated, and nothing in the code read wrong. It also checks that setting a
+  width still lands in one step, which is the other half — animate the width and a
+  seam drag lags the pointer
 - **window chrome** — launches the built app and asks what its window actually
   looks like: titlebar hidden and transparent, content filling the frame, traffic
   lights centred in the band, focus in the web view
@@ -292,9 +329,19 @@ Ten checks, in the order they run:
   page: the new theme has to apply, the headings have to be the new document's,
   and the rail and the posted outline have to be *replaced* rather than added
   to. That is the page-side half of "the first render works and every later one
-  silently does nothing", which is invisible in a single shot. The app's
-  navigation policy is *not* covered — the harness runs its own navigation
-  delegate
+  silently does nothing", which is invisible in a single shot.
+  Three more things are asserted from inside the page, none of them visible in a
+  screenshot: that keyboard motion is set to jump rather than animate — offscreen
+  every scroll is instant whatever was asked for, so only the decision can be
+  checked; that the page reports find-bar focus at load, when the bar takes focus
+  and when the window loses it, because a report that never arrives leaves every
+  plain key dead; and that `n` and `N` stand still at the ends of two documents
+  written for the purpose instead of jumping backwards. Plus the suite's one
+  pixel assertion: the same page shot unselected and selected, with every changed
+  pixel outside the column counted, since WebKit's selection gap filling reaches
+  neither computed style nor geometry.
+  The app's navigation policy is *not* covered — the harness runs its own
+  navigation delegate
 - **contents rail** — the hover preview appears, and sits beside the tick it
   describes rather than at the top of the window
 - **frontmatter hidden** — with the header switched off, nothing from the block

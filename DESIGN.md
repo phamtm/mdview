@@ -137,6 +137,35 @@ Implementation notes that are easy to trip over:
   `code` alone does nothing — `code` is inline inside `pre`, so the pre's strut
   sets the line box. `web/src/viewer.js` tags such blocks `.ascii` by testing for
   U+2500–257F, and the render check asserts the leading matches the font size.
+- **`body` is a flex column for one reason, and it is paint.** WebKit fills the
+  gaps between a selection root's children out to *that root's* content box.
+  `body` is a selection root; `.prose` is not (static position, visible overflow,
+  no flex or grid parent). So selecting across two blocks painted the tint as
+  full-window bands — 208px past the column on the left, 177px on the right,
+  covering the centring margins and the column's own padding. A flex container
+  has no block gaps to fill, so the tint hugs the line boxes instead. Nothing
+  about layout changes: the same 39 `#doc` child rects, the same copied string,
+  the same `window.find` behaviour — which is why the rule reads as cruft and
+  invites deletion. Moving it to `.prose` does not work: that stops margins
+  collapsing between blocks and the column reflows. It is screen-only, with
+  `body { display: block }` inside `@media print`: nothing selects on paper, and
+  WebKit is said to fragment flex containers badly across pages — untested here,
+  because print cannot be measured headlessly, so that half is caution rather
+  than a measurement.
+  `pre` in `figure.code` remains its own selection root by virtue of
+  `overflow-x: auto`, so selected code keeps full-line highlighting inside the
+  block — that is wanted, not a leftover. `tools/snapshot.swift` shoots the page
+  unselected and selected and `tools/check-render.py` asserts
+  `selectionGutterPixels` is 0: the one pixel assertion in the suite, because
+  computed style and `getClientRects()` are identical either way.
+  It is not the cause of a panel slide looking rough either, which is the other
+  thing it gets blamed for. A/B'd against `display: block` while the document's
+  width was being animated: the paint catches up 13ms after a widen and 16ms
+  after a narrow *both* ways, a forced layout after a resize costs 5.4ms median
+  both ways, and the page is handed resize events at the same cadence both ways.
+  What actually moves during a slide is the column's left edge — the measure is
+  capped, so a wider window only re-centres the text — and that is
+  `margin: 0 auto`, not this rule.
 - **A rule written for `[data-theme="night"]` needs a `:root:not([data-theme])`
   twin inside the `prefers-color-scheme: dark` block.** Colophon and the System
   theme on a dark Mac are two different selectors reaching the same palette, so a
@@ -200,6 +229,77 @@ row (so a file reached through a symlinked folder still highlights), and `reveal
 Because both twins resolve alike, the selected row is chosen once for the whole
 list — the row actually opened wins — rather than each row deciding for itself.
 
+## The keyboard
+
+Plain keys for reading — `j k g G n N` to move, `/` to find, `h` and `l` for the
+two panels, `?` for the list of them all. `Sources/Shortcuts.swift` holds the
+table and the rule for reading it, `ShortcutMonitor.swift` is the only thing that
+touches AppKit, `ShortcutsOverlay.swift` draws `?`, and Help ▸ Keyboard Shortcuts
+opens the same overlay for a reader who does not know `?` yet — with no key
+equivalent of its own, because `?` is already the binding and a second one would
+be a binding the table does not know about.
+
+- **One table, and it includes the menu shortcuts.** `Shortcuts.all` is every
+  binding in the app, the menu-owned ones as well, because the overlay is
+  rendered from it — so a binding cannot exist without the reader being told
+  about it. The cost is that the monitor has to skip the `.menu` rows: a menu
+  item already owns its key equivalent, and acting on it here would fire it
+  twice. `tools/test-shortcuts.swift` pins that, plus the things that make it a
+  table: no duplicate strokes, no untitled rows, one title and group per action.
+- **Shift lives in the character, not in the modifier set.** `G` is a key of its
+  own, and so is `?` — which is what `charactersIgnoringModifiers` reports
+  anyway. Recording the flag beside it would record shift twice, and would break
+  these bindings on every layout that does not put `?` above `/`.
+- **Resolution is a pure function of an explicit context.** `Shortcuts.resolve`
+  takes a `KeyContext` — is this window key, is the chrome taking text, does an
+  input in the page have focus, which overlay is up — and returns an action or
+  nothing. No windows, no globals, no view state: the whole policy is testable
+  without synthesising an event, which is most of `test-shortcuts.swift`. The
+  monitor holds no state either; it asks `ViewerView` for a fresh context at
+  every keystroke.
+- **Plain keys must never take a keystroke from the two text inputs**, the
+  sidebar's search field and the page's find bar. Neither can be tracked the
+  obvious way. In the chrome, `controlTextDidBeginEditing` fires on the *first*
+  keystroke — the one that must not be swallowed — so the window's first
+  responder is read instead. In the page, Swift cannot see focus at all, so
+  `web/src/viewer.js` reports it. `focusin`/`focusout` alone left that flag stuck
+  on: moving first responder out of the web view — clicking a file row, the
+  search field, a contents row — fires no `focusout`, the find bar keeps DOM
+  focus, and every plain key then died in silence. The window's own blur is the
+  event that does fire, so it is what stands the flag down, and the page reports
+  once at load because ⌥⌘R sends no message of its own.
+- **A bare key nothing is bound to is swallowed.** Nothing in `Sources/`
+  implements `keyDown`, so a letter reaching the end of the responder chain makes
+  macOS beep — a bubble noise for touching the keyboard in a window whose whole
+  job is reading. The trade is deliberate and worth knowing: a *mistyped*
+  shortcut now gives no feedback at all. That is what makes the pass-through
+  allowlist load-bearing — space and shift-space (how the page turns), tab and
+  shift-tab, return, enter, delete, backspace, and Cocoa's whole 0xF700–0xF8FF
+  function-key range, which covers the arrows, page up and down, home and end
+  without having to name them one by one. It is written as what passes rather
+  than what is dropped, because that is the half a future reader has to be able
+  to check.
+- **Keyboard motion jumps; mouse-driven motion animates.** CSSOM-View's
+  `behavior: "auto"` does *not* mean "no animation" — it defers to the computed
+  `scroll-behavior`, which the stylesheet sets to `smooth`, and only `"instant"`
+  overrides it. This shipped wrong once: a smooth scroll retargets from wherever
+  the animation has got to, so five rapid `j` presses travelled 1334px of the
+  2000 they asked for, and five rapid `n` presses landed on the second heading
+  instead of the fifth. Hence `KEYBOARD_SCROLL_BEHAVIOR` in `web/src/motion.js`,
+  the one value every keyboard path takes, plus a text check in
+  `tools/run-tests.sh` that fails on a literal `behavior: "auto"` anywhere in
+  `web/src` — the constant cannot stop a new call site inventing its own.
+  Clicking a rail tick or a contents row keeps the animation on purpose: that is
+  one jump, and the eye can follow it. `n` and `N` at the ends stand still rather
+  than aiming at the last heading, which past the final heading is a jump
+  *backwards* — at the bottom of a one-heading document, the whole document.
+- **Caps Lock changes the character, so the case comes from the shift flag.** It
+  is not one of the modifiers `charactersIgnoringModifiers` strips: with the lock
+  on, `j` arrives as `"J"`, so `j k h l` matched nothing and were swallowed in
+  silence while `g` and `n` arrived as `G` and `N` and did the opposite of what
+  was pressed. Only letters are re-cased, and only while the lock is on —
+  everything else is left exactly as AppKit reported it, `?` included.
+
 ## Where things live
 
 | Concern | File |
@@ -208,6 +308,7 @@ list — the row actually opened wins — rather than each row deciding for itse
 | Titlebar band, zones, the divider-less split | `Sources/ViewerLayout.swift` |
 | Sidebar density, rows, search, badges, footer | `Sources/SidebarView.swift` |
 | Icon button, outline and ghost button treatments | `Sources/Controls.swift` |
+| Shortcuts overlay: sections, key caps, the two balanced columns | `Sources/ShortcutsOverlay.swift` |
 | Hidden titlebar, window transparency and background | `Sources/WindowChrome.swift` |
 | Document type, colour, code, diagrams, callouts | `Resources/style.css` |
 | Document post-processing and diagram tinting | `web/src/viewer.js` |
@@ -218,8 +319,8 @@ Document surface in all three themes, text sizes, the editorial column, code
 figures with caption bars, syntax colours, diagram treatment, frontmatter block,
 alerts, footnotes, find bar. Chrome: the titlebar band with document name and word
 count, the library sidebar with search, file badges, gold selection and a counted
-footer, the settings panel with self-previewing theme swatches, and the frontmatter
-disclosure.
+footer, the settings panel with self-previewing theme swatches, the frontmatter
+disclosure, and the shortcuts overlay.
 
 ## Frontmatter, and where it is shown
 
@@ -263,6 +364,34 @@ Two things that made the seam judder, both fixed and both easy to reintroduce:
   `documentMinWidth`). Past that the `HStack` has to squeeze someone, and the seam
   jumps out from under the pointer. The cap limits the drag and the width drawn,
   never the stored width — widen the window and the reader's choice comes back.
+
+## Why the panels' slide is declared on the view
+
+`ViewerLayout.swift` carries `.animation(.easeOut(duration: 0.2), value:)` for each
+of the two visibility flags, and the toggles themselves are bare `toggle()` calls.
+That is not a style choice, and wrapping the toggles in `withAnimation` instead —
+which is what it used to do — breaks the animation for most of the app:
+
+**`sidebarVisible` and `outlineVisible` are `@AppStorage`, and an `@AppStorage`
+write is invalidated later than a `@State` one.** By the time SwiftUI acts on it, a
+transaction opened inside SwiftUI's own dispatch has already closed, and the
+animation closed with it. So `withAnimation` worked from exactly one caller — the
+key monitor, which runs outside that cycle — and silently did nothing from the
+titlebar buttons and from the menu items. Measured, in a 2×3 grid of storage kind
+against dispatch site: `@State` animates from all three, `@AppStorage` +
+`withAnimation` only from the monitor, `@AppStorage` + `.animation(value:)` from
+all three. Which is the point of declaring it on the view: the slide belongs to the
+panel, not to whoever flipped the flag, and no future call site can forget it.
+
+**Keyed on the flags, never on the widths.** Dragging a seam writes `sidebarWidth`
+continuously; animate that and the panel trails the pointer by a fifth of a second.
+
+`tools/test-panel-animation.swift` samples the drawn width every 10ms through a
+toggle and counts the values between the two ends — it wants more than four, and
+an unanimated toggle gives none — for the button path and the menu path on both
+panels, and checks that a width write still lands in one step. (The key monitor is
+not driven there: it only fires while the window is key, and a bare executable
+cannot activate itself. It was never the broken one.)
 
 The design has the rail expand into a contents panel after dwelling two seconds in
 its zone. That is gone: an outline you have to know about, and then wait for, is
