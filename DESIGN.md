@@ -55,6 +55,14 @@ measured 1.295 ratio: folder rows are Cormorant at 16pt beside files in Lora at
 12.5pt, and they read as equals. Labels **in caps** are governed by cap height
 instead and need no correction — those still use `Typeface.display` directly.
 
+The ratio fixes apparent size, not stroke weight, and below about 15pt it stops
+being enough: Cormorant is a high-contrast face, so its hairlines thin out to
+nothing at list size, worst of all light-on-dark. Asking for a heavier weight
+makes it worse, not better — the stems thicken and the hairlines do not, which
+widens the contrast that costs the legibility. So the contents panel sets its rows
+in Lora and lets weight carry the hierarchy. Everything still on `displayMatching`
+sits at 15pt or above, where the face holds.
+
 ## Layout
 
 | Zone | Value |
