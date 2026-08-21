@@ -8,7 +8,7 @@ import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 import { createRail } from "./rail.js";
 import { countWords, frontmatterHeader, panelFields, splitFrontmatter } from "./frontmatter.js";
-import { createFindBar } from "./find.js";
+import { createFindBar, documentText } from "./find.js";
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
 (function () {
@@ -222,20 +222,42 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   }
 
   /**
-   * A `srcset` is a comma-separated list of `url [descriptor]`, and a URL in it
-   * may not contain a comma, so splitting on one is safe.
+   * Rewrites every URL in a `srcset`.
+   *
+   * Not `split(",")`, which is what this did first and is wrong: a candidate URL
+   * runs to the next *whitespace*, so it may contain commas — `?w=100,200` is a
+   * legal query string — and only a comma at the end of the URL closes the
+   * candidate. Splitting on every comma turned one valid candidate into two
+   * broken ones and the picture vanished. So the shape of the real grammar:
+   * skip separators, take the URL as the next run of non-whitespace, and let a
+   * descriptor run to the next comma.
    */
   function resolveSrcset(value) {
-    return value
-      .split(",")
-      .map((candidate) => {
-        const parts = candidate.trim().split(/\s+/);
-        if (!parts[0]) return "";
-        parts[0] = resolveURL(parts[0]);
-        return parts.join(" ");
-      })
-      .filter(Boolean)
-      .join(", ");
+    const isSpace = (c) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+    const out = [];
+    let i = 0;
+    while (i < value.length) {
+      while (i < value.length && (isSpace(value[i]) || value[i] === ",")) i += 1;
+      const from = i;
+      while (i < value.length && !isSpace(value[i])) i += 1;
+      let url = value.slice(from, i);
+      // Trailing commas are the candidate separator, not part of the URL.
+      let closed = false;
+      while (url.endsWith(",")) {
+        url = url.slice(0, -1);
+        closed = true;
+      }
+      let descriptor = "";
+      if (!closed) {
+        const at = i;
+        while (i < value.length && value[i] !== ",") i += 1;
+        descriptor = value.slice(at, i).trim();
+        i += 1; // the comma
+      }
+      if (!url) continue;
+      out.push(descriptor ? resolveURL(url) + " " + descriptor : resolveURL(url));
+    }
+    return out.join(", ");
   }
 
   function resolveLocalPaths(root) {
@@ -505,6 +527,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     if (!payload.path) {
       elDoc.hidden = true;
       elEmpty.hidden = false;
+      appliedFormat = "";
       return;
     }
     elEmpty.hidden = true;
@@ -513,6 +536,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     if (payload.error) {
       elDoc.innerHTML = '<div class="error">' + escapeHtml(payload.error) + "</div>";
       elDoc.classList.add("ready");
+      appliedFormat = "";
       return;
     }
 
@@ -524,8 +548,10 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // Frontmatter is a markdown convention, so an HTML file has none — and
     // splitting one anyway would eat any file that happened to start with `---`.
     const isHtml = payload.format === "html";
-    // An unrecognised format renders as markdown, and for an HTML file that is
-    // the exact bug this field exists to prevent — so it must not be silent.
+    // render() is a public entry point, so a caller that is not Swift can pass
+    // anything; Swift itself now sends a DocumentFormat and can only send the
+    // two. An unrecognised value renders as markdown, which for an HTML file is
+    // the bug this field exists to prevent, so it must not be silent.
     if (payload.format !== "html" && payload.format !== "markdown") {
       console.error("mdview: unknown payload format " + JSON.stringify(payload.format));
     }
@@ -547,14 +573,16 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // parsed — which is why this message has always gone first: a throw in
     // marked or DOMPurify still leaves the titlebar a count and its fields.
     //
-    // HTML source is not prose. Counting it raw makes a word of every tag, and
-    // counting it cleverly is worse: which elements reach the screen is
-    // DOMPurify's decision to make, not one to reimplement here, and a word
-    // boundary is the difference between `<li>a</li><li>b</li>` — two words —
-    // and `a<em>b</em>c`, which is one. Both answers live in the rendered
-    // document and nowhere else, so an HTML count waits for one. Nothing is lost
-    // by waiting: an HTML file has no fields, and a render that throws leaves
-    // nothing to count anyway.
+    // HTML source is not prose: counting it raw makes a word of every tag. The
+    // answer is in the built document, so an HTML count waits for one and is
+    // taken from documentText() — the same index the find bar searches, which
+    // already knows where a word can end. Two earlier attempts at this each
+    // invented their own answer and each got a different case wrong, which is
+    // why it is now shared rather than written again.
+    //
+    // The cost of waiting is small and worth naming: if the render throws, the
+    // titlebar keeps the count of the file that was open before, the same as it
+    // does for the moment between any render starting and finishing.
     if (!isHtml) postCount(countWords(split.body));
 
     // An HTML file already *is* the markup, so the markdown parser is skipped.
@@ -568,12 +596,10 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     const dirty = isHtml ? split.body : marked.parse(split.body);
     elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
 
-    // Here, and not further down: innerText is what a reader would select, so it
-    // breaks at a block edge and not inside a phrase — the distinction a
-    // source-level count cannot make. And it must be read before the decorations
-    // below, each of which adds text of its own: a copy button says "Copy", a
-    // heading grows an anchor.
-    if (isHtml) postCount(countWords(elDoc.innerText || elDoc.textContent || ""));
+    // Here, and not further down: the decorations below add text of their own,
+    // and the language badge on a code figure ("JS") is not one of the things
+    // documentText() skips.
+    if (isHtml) postCount(countWords(documentText(elDoc)));
 
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
@@ -702,9 +728,11 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     _internals: {
       splitFrontmatter,
       countWords,
-      // Which parser the last render used. Asserting this is how a test knows
-      // the HTML branch was taken, rather than inferring it from the damage
-      // markdown would have done.
+      // Which parser the last render used. This reports the decision, not the
+      // behaviour — it is read from the same flag the branch reads, so it catches
+      // Swift sending the wrong format and *not* the branch itself going wrong.
+      // What catches that is in tools/run-tests.sh: a paragraph markdown would
+      // turn into a code block, and a `~~` markdown would strike through.
       format: () => appliedFormat,
       keyboardScrollBehavior: KEYBOARD_SCROLL_BEHAVIOR,
       // What the find bar has found. A custom highlight is in neither computed

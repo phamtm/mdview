@@ -116,6 +116,20 @@ function buildIndex(root) {
   return { text: parts.join(""), runs };
 }
 
+/** The document's text, as one string.
+ *
+ *  Shared with the titlebar's word count, which needs exactly what the search
+ *  needs and for the same reason: a newline where a block ends and nothing where
+ *  inline markup does, so `<li>a</li><li>b</li>` is two words and `a<em>b</em>c`
+ *  is one. It also inherits SKIP, so a stylesheet the document carries, a copy
+ *  button and a heading's anchor are not prose. Counting this rather than
+ *  inventing a second answer is the point — the first two attempts at the word
+ *  count each got a different one wrong.
+ */
+export function documentText(root) {
+  return buildIndex(root).text;
+}
+
 /** The (node, offset) an offset in that string came from, as a Range endpoint.
  *
  *  A binary search for the run the character belongs to. `end` looks for the

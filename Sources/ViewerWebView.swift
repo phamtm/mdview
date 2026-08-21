@@ -104,9 +104,14 @@ enum Viewer {
         isHTML(url) ? .html : .markdown
     }
 
-    /// Copy Document hands back the file's own source, so it wants a file whose
-    /// source differs from what is rendered. Plain text does not, and has always
-    /// been left out.
+    /// Copy Document hands back the file's own source. Plain text is left out,
+    /// and has been since before there was a format to distinguish — nothing here
+    /// is a reason to change that.
+    ///
+    /// Not because a .txt has no source of its own to hand back: it goes through
+    /// the markdown parser like anything else, so what is rendered differs from
+    /// the file just as much as an HTML document's does. Two earlier versions of
+    /// this comment claimed otherwise.
     static func hasCopyableSource(_ url: URL?) -> Bool {
         guard let url else { return false }
         return isTextLike(url) && !plainTextExtensions.contains(url.pathExtension.lowercased())

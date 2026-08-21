@@ -238,9 +238,9 @@ if data["strikethrough"]:
 
 # The rest of the render still has to work.
 if data["tables"] != 1: problems.append(f"{data['tables']} tables, want 1")
-if data["headings"] != 4: problems.append(f"{data['headings']} h2s, want 4")
-if data["headingIds"] != 4: problems.append(f"{data['headingIds']} h2s carry an id, want 4")
-if data["railTicks"] != 5: problems.append(f"rail has {data['railTicks']} ticks, want 5")
+if data["headings"] != 5: problems.append(f"{data['headings']} h2s, want 5")
+if data["headingIds"] != 5: problems.append(f"{data['headingIds']} h2s carry an id, want 5")
+if data["railTicks"] != 6: problems.append(f"rail has {data['railTicks']} ticks, want 6")
 # The first image in the document is the plain `src` one. The `srcset` one after
 # it is the case that used to break: the spec prefers srcset over src, so leaving
 # it unresolved pointed inside the app bundle and lost a picture that resolving
@@ -255,25 +255,34 @@ if data["imagesPainted"] != 2:
 # own directory. Asserted on the attribute and not on whether the picture
 # appeared: `../sample-image.png` reaches the same file from the page's directory
 # as from the fixture's, so a load proves nothing here.
-srcset = data["srcsetAttr"]
-if not srcset.startswith("file://"):
-    problems.append(f"srcset is still relative ({srcset!r}) — it resolves against "
-                    "the page inside the app bundle, and the spec prefers it over src")
-elif "/Resources/" in srcset:
-    problems.append(f"srcset resolved into the app bundle ({srcset!r})")
+for srcset in data["srcsetAttrs"].split(" | "):
+    if not srcset.startswith("file://"):
+        problems.append(f"srcset is still relative ({srcset!r}) — it resolves against "
+                        "the page inside the app bundle, and the spec prefers it over src")
+    elif "/Resources/" in srcset:
+        problems.append(f"srcset resolved into the app bundle ({srcset!r})")
+    # One candidate, not two. A URL may contain a comma — `?w=100,200` is a legal
+    # query — so splitting the list on commas broke a valid srcset in half.
+    if len(srcset.split(" 1x")) - 1 != 1 or srcset.count("file://") != 1:
+        problems.append(f"srcset is not one candidate ({srcset!r}) — a comma inside "
+                        "the URL was treated as a candidate separator")
+if not data["posterAttr"].startswith("file://"):
+    problems.append(f"poster is still relative ({data['posterAttr']!r})")
 
 # Sanitising is the half that does not change between the two formats.
 if data["scriptTagsInDoc"]: problems.append(f"{data['scriptTagsInDoc']} script tag(s) survived")
 if data["onerrorAttrs"]: problems.append(f"{data['onerrorAttrs']} onerror attribute(s) survived")
 if data["pwned"]: problems.append("injected script ran")
 
-# Pinned, not just "less than the file": the count comes off the rendered
-# document, so it has to break the source apart at a block edge (the tight
-# `<ul><li>alpha</li><li>bravo</li>` is three words, not one) and hold a phrase
-# together (`a<em>b</em>c` is one, not three). A bound alone passed both bugs.
+# Pinned, not just "less than the file". The count comes off the same text index
+# the find bar searches, so it has to break at a block edge — the tight
+# `<ul><li>alpha</li><li>bravo</li>` is three words, and a table row is two — and
+# hold a phrase together, `mark<strong>down</strong>` being one word and not two.
+# Both are in the fixture. A bound alone passed two different versions of this bug
+# and an earlier pin locked a third one in.
 words, raw_words = int(fields.get("postedWords", -1)), int(fields.get("rawWords", -1))
-if (words, raw_words) != (104, 188):
-    problems.append(f"word count is {words} of {raw_words}, want 104 of 188")
+if (words, raw_words) != (183, 275):
+    problems.append(f"word count is {words} of {raw_words}, want 183 of 275")
 
 # A `---` first line is frontmatter in markdown and nothing at all in HTML.
 # Splitting one anyway ate the first heading and paragraph in silence.
@@ -283,15 +292,19 @@ if dashes["appliedFormat"] != "html":
 if int(dash_fields.get("outlineHeadings", -1)) != 2:
     problems.append(f"a --- first line cost the html file a heading "
                     f"({dash_fields.get('outlineHeadings')} of 2 left)")
-if int(dash_fields.get("postedWords", -1)) != 15:
-    problems.append(f"dashes fixture counts {dash_fields.get('postedWords')} words, want 15")
+# 19 and not 20: the fixture ends in a code block, and the language badge the
+# decorations add to it ("JS") is text the count must not see. Reading the
+# document after decorating it counts that badge.
+if int(dash_fields.get("postedWords", -1)) != 19:
+    problems.append(f"dashes fixture counts {dash_fields.get('postedWords')} words, want 19 — "
+                    "20 means the count was taken after the decorations")
 
 for p in problems: print(f"  FAIL {p}")
 if problems:
     print("HTML TESTS FAILED")
     raise SystemExit(1)
 print(f"  ok   parsed as html (no code figure, no strikethrough), {data['tables']} table, "
-      f"{data['headings']} headings, src and srcset both resolved, sanitised, "
+      f"{data['headings']} headings, src/srcset/poster resolved, sanitised, "
       f"{words} words of text not {raw_words} of source, and a --- first line costs it nothing")
 CHECK
 

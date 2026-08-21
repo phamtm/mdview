@@ -176,6 +176,13 @@ final class Runner: NSObject, WKNavigationDelegate {
             let drawn = Self.number(in: state, key: "svgs")
             let loading = Self.number(in: state, key: "loading")
             let settled = drawn >= wantedDiagrams && loading == 0
+            // A probe that cannot be read would otherwise wait out the deadline
+            // and say nothing, which is the kind of silent wait this replaced.
+            if drawn < 0 || loading < 0 {
+                print("SETTLE probe unreadable: \(state)")
+                self.driveRail()
+                return
+            }
             if settled || Date().timeIntervalSince(start) > 3.0 {
                 self.driveRail()
             } else {
@@ -220,8 +227,13 @@ final class Runner: NSObject, WKNavigationDelegate {
               // resolve to the same file from the page's directory as from the
               // document's, which is exactly what happened to the first attempt
               // at this test. So the rewriting is asserted directly.
-              srcsetAttr: (function (i) { return i ? i.getAttribute('srcset') : 'none'; })(
-                document.querySelector('#doc img[srcset]')),
+              srcsetAttrs: Array.from(document.querySelectorAll('#doc [srcset]'))
+                .map(function (i) { return i.getAttribute('srcset'); }).join(' | '),
+              // A third attribute carrying a path, on an element that is not an
+              // img. Media cannot load under the CSP, so the rewrite is what
+              // there is to check.
+              posterAttr: (function (v) { return v ? v.getAttribute('poster') : 'none'; })(
+                document.querySelector('#doc [poster]')),
               mdLinkHref: (function(){
                 var a = Array.from(document.querySelectorAll('#doc a')).find(function(x){ return /README/.test(x.href); });
                 return a ? a.href : 'none';

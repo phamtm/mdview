@@ -128,8 +128,10 @@ Add as many as you like; they come back next launch.
   code block, so nested elements come out as `<pre><code>&lt;p&gt;…`. Everything
   else about the view is the same: headings get a contents panel and rail ticks,
   relative paths resolve against the file (`src`, `srcset` and `poster` alike),
-  and the sanitiser runs either way — skipping the parser does not skip that. A
-  `.txt` is still read as markdown, as it always was
+  and the sanitiser runs either way — skipping the parser does not skip that. The
+  titlebar's word count is the words of the text, counted off the same index the
+  find bar searches rather than off the source, so tags are not words. A `.txt`
+  is still read as markdown, as it always was
 - Save the file in any editor and the view refreshes, keeping your scroll position
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
@@ -432,13 +434,16 @@ Thirteen checks, in the order they run:
   the branch is wrong: `tools/sample.html` indents a paragraph four spaces, which
   markdown turns into a code block with the tags showing, and puts `~~this~~` in
   loose text between HTML blocks, which is where markdown still does inline work.
-  The rest of the render still has to work — one table, four headings with ids,
-  five rail ticks, and both a `src` and a `srcset` image resolved against the file
+  The rest of the render still has to work — one table, five headings with ids,
+  six rail ticks, and `src`, `srcset` and `poster` all resolved against the file
   — and the sanitiser still has to strip the `<script>` and the `onerror`. The
-  word count is pinned, not just bounded: it comes off the rendered document, so
-  it has to break `<ul><li>alpha</li><li>bravo</li>` into words and keep
-  `a<em>b</em>c` as one. A second fixture opens with `---`, which is frontmatter
-  in markdown and nothing in HTML — splitting it anyway ate a heading in silence
+  word count is pinned, not just bounded: it comes off the same text index the
+  find bar searches, so it has to break `<ul><li>alpha</li><li>bravo</li>` into
+  three words and a table row into two, while keeping
+  `mark<strong>down</strong>` as one. A second fixture opens with `---`, which is
+  frontmatter in markdown and nothing in HTML — splitting it anyway ate a heading
+  in silence — and ends in a code block, so the count is pinned at the value it
+  has *before* the decorations add a language badge to it
 
 Two things make the window snapshot fiddly, both worked around:
 

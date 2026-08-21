@@ -24,12 +24,24 @@ come out struck through if the parser had a turn at it.
      from the source text would run them together into one word. -->
 <ul><li>alpha</li><li>bravo</li><li>charlie</li></ul>
 
+<h2>A word is not split by inline markup</h2>
+
+<p>The picture in mark<strong>down</strong> is one word, not three, and a table
+cell boundary is a break where inline markup is not.</p>
+
 <h2>Paths resolve against the file</h2>
 
 <p>A <a href="./sample.html">relative link</a>, an
 <img src="../sample-image.png" alt="plain src"> and the same picture again
 through <img srcset="../sample-image.png 1x" alt="srcset only">, which the spec
-prefers over src and which markdown never emitted.</p>
+prefers over src and which markdown never emitted. A
+<video poster="../sample-image.png" controls></video> carries its path in a third
+attribute again — media cannot load under the page's CSP, so what is asserted is
+that the attribute was rewritten.</p>
+
+<p>A srcset whose URL contains a comma, which is legal and which splitting on
+commas used to break in two:
+<img srcset="../sample-image.png?w=100,200 1x" alt="comma in the query"></p>
 
 <h2>And it is still sanitised</h2>
 
