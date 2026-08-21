@@ -120,7 +120,7 @@ struct ViewerCommands: Commands {
                 .disabled(doc.url == nil)
             Button("Copy Document") { send(.mdvCopyDocument) }
                 .keyboardShortcut("c", modifiers: [.command, .option])
-                .disabled(!Viewer.isMarkdown(doc.url))
+                .disabled(!Viewer.hasCopyableSource(doc.url))
             Button("Copy File Path") { send(.mdvCopyPath) }
                 .disabled(doc.url == nil)
             Divider()

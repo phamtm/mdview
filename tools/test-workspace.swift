@@ -38,6 +38,25 @@ MainActor.assumeIsolated {
     check("mdx is markdown", Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.mdx")))
     check("txt is not markdown", !Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.txt")))
     check("png is not markdown", !Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.png")))
+    // HTML is opened and rendered, but it is not markdown: the format decides
+    // which parser the page uses, and calling it markdown would run the wrong one.
+    check("html is not markdown", !Viewer.isMarkdown(URL(fileURLWithPath: "/tmp/a.html")))
+    check("html is html", Viewer.isHTML(URL(fileURLWithPath: "/tmp/a.html")))
+    check("htm is html", Viewer.isHTML(URL(fileURLWithPath: "/tmp/a.HTM")))
+    check("md is not html", !Viewer.isHTML(URL(fileURLWithPath: "/tmp/a.md")))
+    check("html is text-like", Viewer.isTextLike(URL(fileURLWithPath: "/tmp/a.html")))
+    check("html formats as html", Viewer.format(for: URL(fileURLWithPath: "/tmp/a.html")) == "html")
+    check(
+        "md formats as markdown",
+        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.md")) == "markdown")
+    // A .txt has always been treated as markdown, and still is.
+    check(
+        "txt formats as markdown",
+        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.txt")) == "markdown")
+    check("nothing open formats as markdown", Viewer.format(for: nil) == "markdown")
+    check(
+        "html source can be copied", Viewer.hasCopyableSource(URL(fileURLWithPath: "/tmp/a.html")))
+    check("txt source is not copied", !Viewer.hasCopyableSource(URL(fileURLWithPath: "/tmp/a.txt")))
     check("nothing open is not markdown", !Viewer.isMarkdown(nil))
 
     workspace.roots.forEach { workspace.remove($0) }

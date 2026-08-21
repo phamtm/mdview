@@ -57,12 +57,15 @@ final class DroppableWebView: WKWebView {
 enum Viewer {
     static let textExtensions: Set<String> = [
         "md", "markdown", "mdown", "mkd", "mdx", "markdn", "txt", "text", "rmd", "qmd",
+        "html", "htm",
     ]
 
     /// Markdown proper, as opposed to the plain-text files we will also open.
     static let markdownExtensions: Set<String> = [
         "md", "markdown", "mdown", "mkd", "mdx", "markdn", "rmd", "qmd",
     ]
+
+    static let htmlExtensions: Set<String> = ["html", "htm"]
 
     static func isTextLike(_ url: URL) -> Bool {
         textExtensions.contains(url.pathExtension.lowercased())
@@ -71,6 +74,27 @@ enum Viewer {
     static func isMarkdown(_ url: URL?) -> Bool {
         guard let url else { return false }
         return markdownExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func isHTML(_ url: URL?) -> Bool {
+        guard let url else { return false }
+        return htmlExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// How the page should treat the file's contents. An HTML file already *is*
+    /// the markup, so running it through the markdown parser damages it: an
+    /// indented element becomes a code block and `an_identifier` grows emphasis.
+    /// Everything that is neither — .txt included — stays markdown, which is what
+    /// it has always been treated as.
+    static func format(for url: URL?) -> String {
+        isHTML(url) ? "html" : "markdown"
+    }
+
+    /// Copy Document hands back the file's own source, so it needs a file whose
+    /// source is the document. Plain text is deliberately left out, as it always
+    /// has been.
+    static func hasCopyableSource(_ url: URL?) -> Bool {
+        isMarkdown(url) || isHTML(url)
     }
 }
 
@@ -140,6 +164,7 @@ struct ViewerWebView: NSViewRepresentable {
                 path: doc.url?.path ?? "",
                 dir: doc.url?.deletingLastPathComponent().path ?? "",
                 error: doc.loadError ?? "",
+                format: Viewer.format(for: doc.url),
                 showFrontmatter: settings.showFrontmatter,
                 theme: settings.theme,
                 size: settings.size,
@@ -349,9 +374,9 @@ struct ViewerWebView: NSViewRepresentable {
                 delegate: nil, didRun: nil, contextInfo: nil)
         }
 
-        /// The file's own markdown, not the rendered text.
+        /// The file's own source, not the rendered text.
         private func copyDocument() {
-            guard Viewer.isMarkdown(doc.url), !doc.markdown.isEmpty else { return }
+            guard Viewer.hasCopyableSource(doc.url), !doc.markdown.isEmpty else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(doc.markdown, forType: .string)
         }

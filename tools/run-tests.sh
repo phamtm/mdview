@@ -161,6 +161,10 @@ start_render build/diag-hover.txt \
   ./build/snapshot Resources sample.md build/shot-hover light
 start_render build/diag-nofm.txt env MDVIEW_BATTERY=theme \
   ./build/snapshot Resources sample.md build/nofm light nofm
+# An .html file, which the page must hand straight to the sanitiser instead of
+# through marked. Checked after check-render.py, below.
+start_render build/diag-html.txt env MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources tools/sample.html build/html light
 
 for entry in "${renders[@]}"; do
   wait "${entry%%:*}" || { echo "  FAIL ${entry#*:}: the render exited non-zero"; exit 1; }
@@ -200,6 +204,44 @@ if data["headings"] < 8: problems.append(f"body lost headings ({data['headings']
 for p in problems: print(f"  FAIL {p}")
 print("  ok   header hidden, body intact" if not problems else "FRONTMATTER-OFF TESTS FAILED")
 raise SystemExit(1 if problems else 0)
+CHECK
+
+echo "==> an html document renders as html, not as markdown"
+python3 - <<'CHECK'
+import json
+raw = open("build/diag-html.txt").read()
+data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
+posted = [l for l in raw.splitlines() if l.startswith("POSTED ")]
+fields = dict(p.split("=", 1) for p in posted[0].removeprefix("POSTED ").split(" ")) if posted else {}
+problems = []
+
+# The parser was skipped. tools/sample.html indents a paragraph by four spaces,
+# which markdown turns into a code block with the tags visible inside it — so a
+# code figure here is the parser having run.
+if data["codeFigures"]: problems.append(f"{data['codeFigures']} code figure(s) — the html went through marked")
+# And the structure came through as structure.
+if data["tables"] != 1: problems.append(f"{data['tables']} tables, want 1")
+if data["headings"] < 3: problems.append(f"{data['headings']} h2s, want 3")
+if data["headingIds"] < 3: problems.append(f"{data['headingIds']} h2s carry an id, want 3")
+if data["railTicks"] < 3: problems.append(f"rail has {data['railTicks']} ticks, want at least 3")
+# Local paths are resolved against the file, as they are for markdown.
+if not data["imgLoaded"]: problems.append("the relative image did not load")
+# Sanitising is the half that does not change: both formats go through DOMPurify.
+if data["scriptTagsInDoc"]: problems.append(f"{data['scriptTagsInDoc']} script tag(s) survived")
+if data["onerrorAttrs"]: problems.append(f"{data['onerrorAttrs']} onerror attribute(s) survived")
+if data["pwned"]: problems.append("injected script ran")
+# The titlebar counts words of the text, not of the tags. Counting the source raw
+# makes a word of every `<p>`, so this must sit well under the whole-file count.
+words, raw_words = int(fields.get("postedWords", -1)), int(fields.get("rawWords", -1))
+if words <= 0: problems.append(f"no word count posted ({words})")
+elif words >= raw_words: problems.append(f"word count {words} counts markup (whole file is {raw_words})")
+
+for p in problems: print(f"  FAIL {p}")
+if problems:
+    print("HTML TESTS FAILED")
+    raise SystemExit(1)
+print(f"  ok   parsed as html (no code figures, {data['tables']} table, {data['headings']} headings, "
+      f"image resolved), sanitised, {words} words of text not {raw_words} of source")
 CHECK
 
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist

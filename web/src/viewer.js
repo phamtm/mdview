@@ -38,6 +38,21 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+  /**
+   * The text an HTML source would show, for counting words in it.
+   *
+   * A <template> is inert: assigning to its innerHTML parses the markup without
+   * running a script, loading an image, or putting anything on the page. Script
+   * and style bodies are dropped because their source is not prose — otherwise a
+   * page with a stylesheet in its head counts every selector as words.
+   */
+  function visibleText(html) {
+    const holder = document.createElement("template");
+    holder.innerHTML = html;
+    holder.content.querySelectorAll("script, style").forEach((n) => n.remove());
+    return holder.content.textContent || "";
+  }
+
   function escapeHtml(s) {
     return s.replace(
       /[&<>"]/g,
@@ -491,7 +506,12 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     applyAlignment(payload.alignment);
     applyMeasure(payload.measure);
 
-    const split = splitFrontmatter(payload.markdown || "");
+    // Frontmatter is a markdown convention, so an HTML file has none — and
+    // splitting one anyway would eat any file that happened to start with `---`.
+    const isHtml = payload.format === "html";
+    const split = isHtml
+      ? { body: payload.markdown || "", fields: [] }
+      : splitFrontmatter(payload.markdown || "");
 
     // The titlebar disclosure is drawn by Swift, but the parser lives here —
     // duplicating it there would be two implementations to keep in step.
@@ -505,12 +525,19 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       // point of this message: Swift cannot exclude the frontmatter without a
       // second parser. Separators are space and newline — a tab deliberately is
       // not one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it.
-      words: countWords(split.body),
+      // Markdown source is close enough to its own prose to count directly.
+      // HTML source is not: counting it raw makes words of the tags, so the
+      // titlebar would read a few hundred too many. Its text is counted instead.
+      words: countWords(isHtml ? visibleText(split.body) : split.body),
       // Title and subtitle are already on the page as the document's own head.
       fields: panelFields(split.fields),
     });
 
-    const dirty = marked.parse(split.body);
+    // An HTML file already *is* the markup, so the markdown parser is skipped —
+    // it damages what it is handed: an indented element becomes a code block and
+    // `an_identifier` grows emphasis. The sanitiser is not what changes; both
+    // formats go through it, which is what strips <script> either way.
+    const dirty = isHtml ? split.body : marked.parse(split.body);
     elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
 
     if (split.fields.length && payload.showFrontmatter !== false) {

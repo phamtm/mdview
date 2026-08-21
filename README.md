@@ -1,7 +1,7 @@
 # MDView
 
-A local Markdown viewer for macOS. It opens a `.md` file, renders it nicely, and
-re-renders the moment you save the file in your editor. A sidebar holds the
+A local Markdown viewer for macOS. It opens a `.md` file — or an `.html` one —
+renders it nicely, and re-renders the moment you save the file in your editor. A sidebar holds the
 folders you work in, so you can browse and click between files. That's the whole
 scope — no editing, no syncing, no accounts.
 
@@ -121,6 +121,13 @@ Add as many as you like; they come back next launch.
 ### Document
 
 - `⌘O` opens a file; drag a file onto the window; or `open -a MDView notes.md`
+- Markdown (`.md .markdown .mdown .mkd .mdx .markdn .rmd .qmd`), HTML (`.html
+  .htm`) and plain text (`.txt .text`). An HTML file is shown as the page it
+  already is — the markdown parser is skipped for it, because running it would
+  turn an indented element into a code block and grow emphasis inside
+  `an_identifier`. Everything else about the view is the same: headings get a
+  contents panel and rail ticks, relative paths resolve against the file, and the
+  sanitiser runs either way. A `.txt` is still read as markdown, as it always was
 - Save the file in any editor and the view refreshes, keeping your scroll position
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
@@ -132,8 +139,8 @@ Add as many as you like; they come back next launch.
   like the sidebar, the width sticks, and neither panel is allowed to squeeze the
   document below its minimum width
 
-To make `.md` files open here by default: select one in Finder, `⌘I`, and pick
-MDView under "Open with", then "Change All".
+To make `.md` (or `.html`) files open here by default: select one in Finder,
+`⌘I`, and pick MDView under "Open with", then "Change All".
 
 ### Shortcuts
 
@@ -243,7 +250,9 @@ rebuild, `killall Dock` forces it to re-read.
 
 Three things worth knowing if you change it:
 
-- **Everything a markdown file contains is treated as untrusted.** The rendered
+- **Everything an opened file contains is treated as untrusted** — markdown and
+  HTML alike; skipping the markdown parser for an HTML file does not skip the
+  sanitiser, which is the whole reason the two are separate steps. The rendered
   HTML goes through DOMPurify, and `viewer.html` carries a Content-Security-Policy.
 
   Both are needed, for a narrower reason than you might assume. The page is
@@ -326,7 +335,7 @@ That render used to be a suite step, at 16s a run, and it had no assertions at
 all — it could not fail. What the real window looks like is
 `check-window-chrome.sh`, which asks the running app.
 
-Twelve checks, in the order they run:
+Thirteen checks, in the order they run:
 
 - **web bundle** — esbuild is the syntax check, since it fails the build on a
   parse error, and it means everything below runs against the current `web/src`.
@@ -338,8 +347,10 @@ Twelve checks, in the order they run:
   `RenderPayload.swift`, and the harness goes through that type rather than
   hand-rolling a dictionary. The two sides drifted once and the tests missed it
 - **file watcher** — survives the temp-file-plus-rename that editors do on save
-- **sidebar tree** — sorts folders first, filters non-markdown files, expands down
-  to a revealed file, and notices files appearing and disappearing on disk
+- **sidebar tree** — sorts folders first, filters files it cannot open, expands
+  down to a revealed file, and notices files appearing and disappearing on disk.
+  Also which extension means what: that `.html` is opened but is *not* markdown,
+  so it reaches the page as `format: "html"` and the wrong parser cannot run
 - **shortcut table and resolver** — what every key means, and what it means while
   something else has the keyboard: the sidebar's search box, the page's find bar,
   each overlay, another window, Caps Lock on. The expectations are written out by
@@ -414,6 +425,13 @@ Twelve checks, in the order they run:
 - **frontmatter hidden** — with the header switched off, nothing from the block
   reaches the document, the YAML doesn't leak into the body, and the body keeps
   its headings
+- **html renders as html** — `tools/sample.html` is written so that the markdown
+  parser would visibly damage it: a paragraph indented four spaces becomes a code
+  block with its tags showing. No code figure means the parser was skipped. The
+  rest of the render still has to work — one table, three headings with ids, rail
+  ticks, the relative image resolved — and the sanitiser still has to strip the
+  `<script>` and the `onerror`. Plus the word count, which for HTML counts the
+  text and not the tags: 81 words of prose out of a 142-word file
 
 Two things make the window snapshot fiddly, both worked around:
 

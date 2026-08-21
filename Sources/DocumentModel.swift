@@ -104,8 +104,10 @@ final class DocumentModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: recentsKey)
     }
 
-    static let contentTypes = ["net.daringfireball.markdown", "public.plain-text", "public.text"]
-        .compactMap(UTType.init(_:))
+    static let contentTypes = [
+        "net.daringfireball.markdown", "public.plain-text", "public.text", "public.html",
+    ]
+    .compactMap(UTType.init(_:))
 
     // MARK: - Private
 

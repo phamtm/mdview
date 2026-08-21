@@ -98,13 +98,14 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
-      <key>CFBundleTypeName</key><string>Markdown Document</string>
+      <key>CFBundleTypeName</key><string>Document</string>
       <key>CFBundleTypeRole</key><string>Viewer</string>
       <key>LSHandlerRank</key><string>Alternate</string>
       <key>LSItemContentTypes</key>
       <array>
         <string>net.daringfireball.markdown</string>
         <string>public.plain-text</string>
+        <string>public.html</string>
       </array>
     </dict>
   </array>

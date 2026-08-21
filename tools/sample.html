@@ -1,0 +1,30 @@
+<!-- A fixture for the HTML path. Every part of it is chosen because the markdown
+     parser would damage it, so a render that looks right here is evidence the
+     parser was skipped rather than evidence that HTML happens to survive it. -->
+<h1>An HTML document</h1>
+
+<p>Opened as HTML, not as markdown.</p>
+
+    <p>This paragraph is indented four spaces. Markdown would make it a code
+    block, tags and all, so a code figure here means the parser ran.</p>
+
+<h2>Emphasis is not invented</h2>
+
+<p>A name like some_identifier_here keeps its underscores; markdown would eat the
+middle and emphasise it. Same for a*b*c.</p>
+
+<h2>Structure survives</h2>
+
+<table>
+  <thead><tr><th>Key</th><th>Value</th></tr></thead>
+  <tbody><tr><td>format</td><td>html</td></tr></tbody>
+</table>
+
+<p>A <a href="./sample.html">relative link</a> and an
+<img src="../sample-image.png" alt="image from a parent directory"> resolved
+against the file, the same as in a markdown document.</p>
+
+<h2>And it is still sanitised</h2>
+
+<script>window.pwned = true;</script>
+<img src="does-not-exist.png" onerror="window.pwned = true">

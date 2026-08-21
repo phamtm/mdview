@@ -53,7 +53,7 @@ struct ViewerView: View {
                 meta: documentMeta,
                 sidebarWidth: sidebarVisible ? sidebarWidth : ViewerView.collapsedZone,
                 sidebarVisible: sidebarVisible,
-                canCopy: Viewer.isMarkdown(doc.url),
+                canCopy: Viewer.hasCopyableSource(doc.url),
                 outlineOpen: outlineVisible,
                 toggleOutline: toggleOutline,
                 frontmatter: doc.frontmatter,

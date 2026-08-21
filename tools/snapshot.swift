@@ -130,6 +130,7 @@ final class Runner: NSObject, WKNavigationDelegate {
             path: mdURL.path,
             dir: mdURL.deletingLastPathComponent().path,
             error: "",
+            format: Viewer.format(for: mdURL),
             showFrontmatter: showFrontmatter,
             theme: firstTheme,
             size: "regular",
@@ -549,7 +550,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let payload = RenderPayload(
             markdown: Runner.findMarkdown,
             path: dir.appendingPathComponent("find.md").path, dir: dir.path,
-            error: "", showFrontmatter: showFrontmatter,
+            error: "", format: "markdown", showFrontmatter: showFrontmatter,
             theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             print("FINDTYPING {\"error\":\"payload encode failed\"}")
@@ -786,7 +787,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let payload = RenderPayload(
             markdown: Runner.selectionMarkdown,
             path: dir.appendingPathComponent("selection.md").path, dir: dir.path,
-            error: "", showFrontmatter: showFrontmatter,
+            error: "", format: "markdown", showFrontmatter: showFrontmatter,
             theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             print("SELECTION {\"error\":\"payload encode failed\"}")
@@ -1000,7 +1001,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let dir = mdURL.deletingLastPathComponent()
         let payload = RenderPayload(
             markdown: markdown, path: dir.appendingPathComponent(name).path, dir: dir.path,
-            error: "", showFrontmatter: showFrontmatter, theme: firstTheme,
+            error: "", format: "markdown", showFrontmatter: showFrontmatter, theme: firstTheme,
             size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             then("{\"error\":\"payload encode failed\"}")
@@ -1091,6 +1092,7 @@ final class Runner: NSObject, WKNavigationDelegate {
             path: dir.appendingPathComponent("second-render.md").path,
             dir: dir.path,
             error: "",
+            format: "markdown",
             showFrontmatter: showFrontmatter,
             theme: secondTheme,
             size: "regular",
