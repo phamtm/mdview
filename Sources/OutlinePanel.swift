@@ -99,14 +99,12 @@ private struct OutlineRow: View {
         }
     }
 
-    /// The body face, not the display face, and weight carries the hierarchy.
+    /// The body face, with weight carrying the hierarchy.
     ///
-    /// Cormorant is a high-contrast serif: at list size its hairlines thin out to
-    /// nothing, and on a dark ground they disappear — asking for a heavier weight
-    /// only thickens the stems, widening the very contrast that costs the
-    /// legibility. Lora holds its strokes at 12pt, which is what a list of
-    /// headings needs. The document still sets its headings in Cormorant, where
-    /// the size suits it.
+    /// Cormorant is a high-contrast serif: at list sizes its hairlines thin to
+    /// nothing, and a heavier weight only thickens the stems, widening the
+    /// contrast that costs the legibility. Lora holds its strokes at 12pt. The
+    /// document still sets headings in Cormorant, where the size suits it.
     private var font: Font {
         switch heading.level {
         case 1: return Typeface.text(13, weight: .semibold)

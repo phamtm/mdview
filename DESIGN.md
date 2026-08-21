@@ -15,10 +15,6 @@ Read those before changing anything visual, and take real values from them rathe
 than inventing spacing or colour. This file records only **how** the spec is
 implemented here, and where the two necessarily differ.
 
-An earlier version of this document described a different direction — system
-sans, monochrome chrome, no lines anywhere. It has been replaced wholesale. Where
-traces of it survive in old commits, the design project wins.
-
 ## The idea
 
 Editorial. Serif type on a soft ground, justified columns, hairlines carrying the
@@ -369,19 +365,21 @@ Two things that made the seam judder, both fixed and both easy to reintroduce:
 
 `ViewerLayout.swift` carries `.animation(.easeOut(duration: 0.2), value:)` for each
 of the two visibility flags, and the toggles themselves are bare `toggle()` calls.
-That is not a style choice, and wrapping the toggles in `withAnimation` instead —
-which is what it used to do — breaks the animation for most of the app:
+That is not a style choice: wrapping the toggles in `withAnimation` instead breaks
+the animation for most of the app.
 
 **`sidebarVisible` and `outlineVisible` are `@AppStorage`, and an `@AppStorage`
 write is invalidated later than a `@State` one.** By the time SwiftUI acts on it, a
 transaction opened inside SwiftUI's own dispatch has already closed, and the
-animation closed with it. So `withAnimation` worked from exactly one caller — the
-key monitor, which runs outside that cycle — and silently did nothing from the
-titlebar buttons and from the menu items. Measured, in a 2×3 grid of storage kind
-against dispatch site: `@State` animates from all three, `@AppStorage` +
-`withAnimation` only from the monitor, `@AppStorage` + `.animation(value:)` from
-all three. Which is the point of declaring it on the view: the slide belongs to the
-panel, not to whoever flipped the flag, and no future call site can forget it.
+animation closed with it. `withAnimation` therefore animates only from a caller
+outside that cycle, such as the key monitor, and does nothing from the titlebar
+buttons or the menu.
+
+Measured across storage kind against dispatch site: `@State` animates from all
+three call sites, `@AppStorage` + `withAnimation` only from the monitor,
+`@AppStorage` + `.animation(value:)` from all three. Hence declaring it on the
+view: the slide belongs to the panel, not to whoever flipped the flag, and no call
+site can forget it.
 
 **Keyed on the flags, never on the widths.** Dragging a seam writes `sidebarWidth`
 continuously; animate that and the panel trails the pointer by a fifth of a second.
@@ -389,9 +387,9 @@ continuously; animate that and the panel trails the pointer by a fifth of a seco
 `tools/test-panel-animation.swift` samples the drawn width every 10ms through a
 toggle and counts the values between the two ends — it wants more than four, and
 an unanimated toggle gives none — for the button path and the menu path on both
-panels, and checks that a width write still lands in one step. (The key monitor is
-not driven there: it only fires while the window is key, and a bare executable
-cannot activate itself. It was never the broken one.)
+panels, and checks that a width write still lands in one step. The key monitor is
+not covered: it fires only while the window is key, and a bare executable cannot
+activate itself.
 
 The design has the rail expand into a contents panel after dwelling two seconds in
 its zone. That is gone: an outline you have to know about, and then wait for, is

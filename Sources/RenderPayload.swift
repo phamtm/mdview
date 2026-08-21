@@ -2,17 +2,14 @@ import Foundation
 
 /// What Swift hands the page for one render.
 ///
-/// This type exists because the contract used to be written out twice — once in
-/// the app and once in the snapshot harness — and they drifted: the app stopped
-/// sending `theme`, so the document ignored the theme setting while the chrome
-/// followed it, and the tests still passed because the harness sent its own
-/// complete payload. Both sides build this now, and
-/// `tools/check-payload.sh` checks every key the page reads is declared here.
+/// The app and the snapshot harness both build this, so the two cannot drift —
+/// a harness with its own copy of the contract will happily pass while the app
+/// sends something else. `tools/check-payload.sh` checks both directions: every
+/// key the page reads is sent, and every key sent is read.
 struct RenderPayload {
     var markdown: String
     var path: String
     var dir: String
-    var name: String
     var error: String
     var showFrontmatter: Bool
     var theme: String
@@ -25,7 +22,6 @@ struct RenderPayload {
             "markdown": markdown,
             "path": path,
             "dir": dir,
-            "name": name,
             "error": error,
             "showFrontmatter": showFrontmatter,
             "theme": theme,

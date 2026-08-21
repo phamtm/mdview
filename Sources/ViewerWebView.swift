@@ -139,7 +139,6 @@ struct ViewerWebView: NSViewRepresentable {
                 markdown: doc.markdown,
                 path: doc.url?.path ?? "",
                 dir: doc.url?.deletingLastPathComponent().path ?? "",
-                name: doc.url?.lastPathComponent ?? "",
                 error: doc.loadError ?? "",
                 showFrontmatter: settings.showFrontmatter,
                 theme: settings.theme,

@@ -144,9 +144,9 @@ final class WorkspaceModel: ObservableObject {
 
     /// Called by nodes when they expand, collapse, or reload their children.
     ///
-    /// Coalesced to one rebuild per turn: a refresh re-reads every folder ever
-    /// loaded, and each one used to trigger a full tree walk and a SwiftUI
-    /// invalidation — dozens of them, synchronously, on every app activation.
+    /// Coalesced to one rebuild per turn. A refresh re-reads every folder ever
+    /// loaded, and rebuilding per folder would mean dozens of full tree walks and
+    /// SwiftUI invalidations, synchronously, on every app activation.
     func treeChanged() {
         guard !flattenPending else { return }
         flattenPending = true

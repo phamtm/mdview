@@ -1,10 +1,9 @@
 /* The tick rail: a passive position indicator down the left of the document.
  *
  * Ticks are sized by heading level and swell under the pointer; hovering one
- * names its section. Clicking jumps. It deliberately does *not* expand into a
- * contents panel any more — that lived behind a two-second dwell, which meant
- * you had to know it was there. The outline is a panel in the chrome now, and
- * this rail reports the headings to it.
+ * names its section. Clicking jumps. The rail is an indicator only — the
+ * navigable outline is a panel in the chrome, and this reports the headings to
+ * it.
  */
 
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
@@ -189,9 +188,9 @@ export function createRail(post) {
      * list the rail and the contents panel draw from, so all three agree on what
      * a heading is.
      *
-     * At either end it does nothing. "Nothing", not "the last heading": past the
-     * final heading, aiming at the last one is a jump *backwards* — at the bottom
-     * of a one-heading document that threw the reader from y=7043 to y=16.
+     * At either end it does nothing — "nothing", not "the nearest heading":
+     * past the final heading, aiming at the last one is a jump *backwards*, which
+     * throws the reader up the page instead of leaving them where they are.
      */
     step(direction) {
       if (!headings.length) return;

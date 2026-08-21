@@ -107,7 +107,6 @@ final class Runner: NSObject, WKNavigationDelegate {
             markdown: markdown,
             path: mdURL.path,
             dir: mdURL.deletingLastPathComponent().path,
-            name: mdURL.lastPathComponent,
             error: "",
             showFrontmatter: showFrontmatter,
             theme: firstTheme,

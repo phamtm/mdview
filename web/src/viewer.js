@@ -401,7 +401,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
         },
       });
     } catch (error) {
-      // Never fail silently: a bad token used to kill every diagram at once.
+      // Never fail silently: a bad token kills every diagram in one go.
       diagrams.forEach((d) => {
         d.el.innerHTML =
           '<div class="error">Mermaid setup: ' +
@@ -603,12 +603,10 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // no fields at all, which is a failure mode Swift-local counting never had.
     post({
       action: "frontmatter",
-      // The titlebar's word count, of the body only. Swift used to count the raw
-      // file, frontmatter included; it cannot count the body without a second
-      // frontmatter parser, which is the thing this message exists to avoid.
-      // Separators are space and newline, exactly as Swift had them — a tab is
-      // deliberately not one, so `a\tb` stays one word. tools/wordcount-tests.js
-      // pins that.
+      // The titlebar's word count, of the body only. Counting it here is the
+      // point of this message: Swift cannot exclude the frontmatter without a
+      // second parser. Separators are space and newline — a tab deliberately is
+      // not one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it.
       words: countWords(split.body),
       // Title and subtitle are already on the page as the document's own head.
       fields: split.fields
@@ -731,9 +729,9 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
      the flag down; window focus puts back whatever is true then. */
   window.addEventListener("blur", () => reportFocus(false));
   window.addEventListener("focus", () => reportFocus(inputHasFocus()));
-  /* And once now, so a page that has just loaded re-syncs Swift's copy. ⌥⌘R
-     (reloadFromOrigin) sends no message of its own, and a reload with the find
-     bar open used to leave the flag true for good. */
+  /* And once now, so a page that has just loaded re-syncs Swift's copy: ⌥⌘R
+     (reloadFromOrigin) sends no message of its own, so without this a reload with
+     the find bar open would leave the flag true for good. */
   reportFocus(inputHasFocus());
 
   // --- moving about, for the chrome's keyboard shortcuts ---------------------

@@ -16,6 +16,16 @@ for key in $keys; do
   fi
 done
 
+# The other direction: a key the payload sends that the page never reads is dead
+# weight, and `name` sat there unused for weeks.
+sent=$(grep -oE '"[a-zA-Z]+":' Sources/RenderPayload.swift | tr -d '":')
+for key in $sent; do
+  if ! grep -q "payload\.$key" web/src/*.js; then
+    echo "  FAIL RenderPayload sends $key, no page code reads it"
+    fail=1
+  fi
+done
+
 # And the harness must go through the same type, not hand-roll a dictionary.
 if grep -q 'let payload: \[String: Any\]' tools/snapshot.swift; then
   echo "  FAIL tools/snapshot.swift builds its own payload dictionary"

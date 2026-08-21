@@ -25,10 +25,9 @@ struct ShortcutsOverlay: View {
     private static let chrome: CGFloat = 42 + 56 + 48
 
     var body: some View {
-        // The window's height, which is the only thing that says whether the
-        // table fits. A short window used to simply crop the panel: the title
-        // bar, the first section and the Done button all ran off the edges with
-        // no way to reach them.
+        // The window's height is the only thing that says whether the table
+        // fits; in a short window the panel has to scroll, or its titlebar, first
+        // section and Done button all fall off the edges out of reach.
         GeometryReader { geo in
             ZStack {
                 backdrop

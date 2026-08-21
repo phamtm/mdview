@@ -357,6 +357,18 @@ Two things make the window snapshot fiddly, both worked around:
   stand-in traffic lights, and the real titlebar is verified by state instead —
   which is exactly the gap that let the duplicate-title bug through.
 
+The offscreen renders can be driven into states a still capture cannot reach:
+
+| Variable | Effect |
+| --- | --- |
+| `MDVIEW_THEME=paper\|vellum\|night` | Render in that theme |
+| `MDVIEW_ALIGN=left`, `MDVIEW_MEASURE=900` | Alignment and column width |
+| `MDVIEW_WIDTH=1400` | Page width, for layout that depends on the measure fitting |
+| `MDVIEW_RAIL=hover` | Hover a tick, showing its preview card |
+| `MDVIEW_SETTINGS=1`, `MDVIEW_FRONTMATTER=1`, `MDVIEW_OUTLINE=1` | Open that panel |
+| `MDVIEW_SIDEBAR_CLOSED=1` | Capture with the library closed |
+| `MDVIEW_ROOT=<path>` | Point the sidebar at a real folder |
+
 It also writes `build/shot-{light,dark}.png`, plus one per remaining run
 (`shot-night-dark.png`, `shot-vellum-light.png`, `shot-system-dark.png`), so you
 can eyeball the styling without launching anything.
