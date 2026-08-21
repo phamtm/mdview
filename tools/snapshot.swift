@@ -451,7 +451,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let payload = RenderPayload(
             markdown: Runner.selectionMarkdown,
             path: dir.appendingPathComponent("selection.md").path, dir: dir.path,
-            name: "selection.md", error: "", showFrontmatter: showFrontmatter,
+            error: "", showFrontmatter: showFrontmatter,
             theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             print("SELECTION {\"error\":\"payload encode failed\"}")
@@ -665,7 +665,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let dir = mdURL.deletingLastPathComponent()
         let payload = RenderPayload(
             markdown: markdown, path: dir.appendingPathComponent(name).path, dir: dir.path,
-            name: name, error: "", showFrontmatter: showFrontmatter, theme: firstTheme,
+            error: "", showFrontmatter: showFrontmatter, theme: firstTheme,
             size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             then("{\"error\":\"payload encode failed\"}")
@@ -755,7 +755,6 @@ final class Runner: NSObject, WKNavigationDelegate {
             // file it already has and keep anything from it.
             path: dir.appendingPathComponent("second-render.md").path,
             dir: dir.path,
-            name: "second-render.md",
             error: "",
             showFrontmatter: showFrontmatter,
             theme: secondTheme,
