@@ -226,6 +226,12 @@ struct ViewerWebView: NSViewRepresentable {
                 doc.outline = Outline(headings: headings, current: doc.outline.current)
             case "outlinePosition":
                 doc.outline.current = body["index"] as? Int ?? -1
+            case "pageFocus":
+                // Which is how `KeyContext.pageInputFocused` is real rather than
+                // guessed: Swift cannot see into the page, so the page says so.
+                NotificationCenter.default.post(
+                    name: .mdvPageInputFocus,
+                    object: NSNumber(value: body["focused"] as? Bool ?? false))
             case "copyText":
                 if let text = body["text"] as? String {
                     NSPasteboard.general.clearContents()
@@ -249,12 +255,32 @@ struct ViewerWebView: NSViewRepresentable {
             }
 
             let center = NotificationCenter.default
+
+            // The keyboard shortcuts that move the reader about. Each carries a
+            // direction rather than nothing, so they read the notification's
+            // object the way mdvScrollToHeading above does. The page owns
+            // scrolling and the heading list; none of this is computed here.
+            let directed: [(Notification.Name, String)] = [
+                (.mdvScrollHalfPage, "scrollHalfPage"),
+                (.mdvScrollToEdge, "scrollToEdge"),
+                (.mdvStepHeading, "stepHeading"),
+            ]
+            for (name, function) in directed {
+                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    let direction = (note.object as? NSNumber)?.intValue ?? 1
+                    Task { @MainActor in
+                        self?.run("window.mdview.\(function)(\(direction))")
+                    }
+                }
+            }
+
             let map: [(Notification.Name, () -> Void)] = [
                 (.mdvReload, { [weak self] in self?.doc.reload() }),
                 (.mdvZoomIn, { [weak self] in self?.setZoom(delta: 0.1) }),
                 (.mdvZoomOut, { [weak self] in self?.setZoom(delta: -0.1) }),
                 (.mdvZoomReset, { [weak self] in self?.resetZoom() }),
                 (.mdvFind, { [weak self] in self?.run("window.mdview.openFind()") }),
+                (.mdvDismissFind, { [weak self] in self?.run("window.mdview.dismissFind()") }),
                 (.mdvPrint, { [weak self] in self?.printPage() }),
                 (.mdvCopyPath, { [weak self] in self?.copyPath() }),
                 (.mdvCopyDocument, { [weak self] in self?.copyDocument() }),

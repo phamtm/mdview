@@ -17,6 +17,10 @@ struct ViewerView: View {
     @State private var rowWidth: CGFloat = 0
     @State private var showSettings = false
     @State private var showFrontmatter = false
+    @State private var showShortcuts = false
+    /// Reported by the page: an input in there has focus, so plain keys are its
+    /// own. See the `pageFocus` message in web/src/viewer.js.
+    @State private var pageInputFocused = false
     @AppStorage("outlineVisible") private var outlineVisible = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
@@ -141,14 +145,39 @@ struct ViewerView: View {
                 .transition(.opacity)
             }
         }
+        // Above the settings sheet, so `keyOverlay` can name the topmost one.
+        .overlay {
+            if showShortcuts {
+                ShortcutsOverlay(palette: palette, close: { showShortcuts = false })
+                    .transition(.opacity)
+            }
+        }
+        // Everything in Shortcuts.all that is not a menu item. The closure is
+        // asked at the keystroke, and re-supplied on every update, so no flag it
+        // reads can be stale.
+        .shortcutKeys(keyContext: keyContext, perform: perform)
         .onReceive(NotificationCenter.default.publisher(for: .mdvOpenSettings)) { _ in
             showSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvShowShortcuts)) { _ in
+            showShortcuts = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvPageInputFocus)) { note in
+            pageInputFocused = (note.object as? NSNumber)?.boolValue ?? false
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleFrontmatter)) { _ in
             guard doc.url != nil else { return }
             showFrontmatter.toggle()
         }
-        .onChange(of: doc.url) { _, _ in showFrontmatter = false }
+        .onChange(of: doc.url) { _, _ in
+            showFrontmatter = false
+            // Belt and braces behind the page's own reporting: opening another
+            // document re-renders, and nothing in the page should still be
+            // holding the keyboard. The page says so too (window blur, and a
+            // report at startup), but a stuck flag kills every plain key, so it
+            // is worth clearing from both sides.
+            pageInputFocused = false
+        }
         // The titlebar is transparent, so content owns the whole window frame.
         .ignoresSafeArea()
         // No focus rings on any control: this is a reading window, and SwiftUI
@@ -183,6 +212,18 @@ struct ViewerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mdvToggleOutline)) { _ in
             toggleOutline()
         }
+        // The panels' slide is declared here, on the view, rather than wrapped
+        // around the two toggles in `withAnimation`. Both flags are @AppStorage,
+        // and an @AppStorage write is invalidated a beat later than a @State one:
+        // by the time SwiftUI acts on it, a transaction opened inside SwiftUI's
+        // own dispatch — a button's action, a publisher's delivery — has closed
+        // again, and the animation with it. Only the key monitor animated, because
+        // it runs outside that cycle. Measured in tools/test-panel-animation.swift.
+        //
+        // Keyed on the two flags alone: dragging a seam writes `sidebarWidth`
+        // continuously, and animating *that* would make the drag lag the pointer.
+        .animation(.easeOut(duration: 0.2), value: sidebarVisible)
+        .animation(.easeOut(duration: 0.2), value: outlineVisible)
     }
 
     // A panel is capped by what the window can spare: the other panel, plus the
@@ -242,13 +283,67 @@ struct ViewerView: View {
         return words == 1 ? "1 word" : "\(words.formatted()) words"
     }
 
-    private func toggleOutline() {
-        withAnimation(.easeOut(duration: 0.2)) { outlineVisible.toggle() }
+    // MARK: Keyboard shortcuts
+
+    /// What a keystroke means right now. Built here because this is where the
+    /// overlay flags live; `window` comes from the view hierarchy, which is the
+    /// one thing a SwiftUI view cannot ask for itself.
+    private func keyContext(in window: NSWindow?) -> KeyContext {
+        KeyContext(
+            windowIsKey: window != nil && window == NSApp.keyWindow,
+            editingChromeText: KeyContext.isEditingText(in: window),
+            pageInputFocused: pageInputFocused,
+            overlay: keyOverlay
+        )
     }
 
-    private func toggleSidebar() {
-        withAnimation(.easeOut(duration: 0.2)) { sidebarVisible.toggle() }
+    /// The topmost overlay, in the order they are drawn above.
+    private var keyOverlay: KeyContext.Overlay {
+        if showShortcuts { return .help }
+        if showSettings { return .settings }
+        if showFrontmatter, doc.url != nil { return .frontMatter }
+        return .none
     }
+
+    /// Whatever the monitor resolved. The panels and the overlays are ours; the
+    /// rest is the page's, reached the way the menu reaches it.
+    ///
+    /// Exhaustive on purpose: a new action has to be given a home here, or the
+    /// compiler says so.
+    private func perform(_ action: ShortcutAction) {
+        switch action {
+        case .toggleSidebar: toggleSidebar()
+        case .toggleContents: toggleOutline()
+        case .toggleShortcutsHelp: showShortcuts.toggle()
+        case .dismissOverlay:
+            if showShortcuts { showShortcuts = false } else { post(.mdvDismissFind) }
+        case .scrollHalfPageDown: post(.mdvScrollHalfPage, 1)
+        case .scrollHalfPageUp: post(.mdvScrollHalfPage, -1)
+        case .jumpToBottom: post(.mdvScrollToEdge, 1)
+        case .jumpToTop: post(.mdvScrollToEdge, -1)
+        case .nextHeading: post(.mdvStepHeading, 1)
+        case .previousHeading: post(.mdvStepHeading, -1)
+        // Guarded the same way the Find… menu item is `.disabled(doc.url == nil)`:
+        // with no document there is nothing to search, and the two must agree.
+        case .find: if doc.url != nil { post(.mdvFind) }
+        // Menu items own their own key equivalents, so `Shortcuts.resolve` never
+        // hands these over — see the `.menu` entries in the table.
+        case .openFile, .addFolder, .reload, .reloadRenderer, .revealInFinder, .copyDocument,
+            .printDocument, .zoomIn, .zoomOut, .zoomReset, .openSettings, .toggleFrontMatter:
+            break
+        }
+    }
+
+    private func post(_ name: Notification.Name, _ direction: Int? = nil) {
+        NotificationCenter.default.post(
+            name: name, object: direction.map { NSNumber(value: $0) })
+    }
+
+    // Plain mutations: the slide is the view's, not the caller's. See the
+    // `.animation` modifiers on the body.
+    private func toggleOutline() { outlineVisible.toggle() }
+
+    private func toggleSidebar() { sidebarVisible.toggle() }
 
 }
 

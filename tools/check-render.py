@@ -34,6 +34,14 @@ EXPECT = {
     # The column clears the contents rail by 68px. This lived in a duplicate
     # .prose rule for a while and won only by being last in the file.
     "proseLeftPadding": lambda v: v == "68px",
+    # Keyboard motion jumps; it must never animate. Asserted as the decision
+    # rather than as a measured scroll, because this render is offscreen: rAF
+    # never fires there, so every scroll is instant whatever was asked for and a
+    # measurement would pass with the bug in place. "auto" is the trap — it
+    # inherits `scroll-behavior: smooth` from style.css instead of overriding it,
+    # which cost five rapid j presses 666px of their 2000 and put five rapid n
+    # presses on the second heading instead of the fifth. See web/src/motion.js.
+    "keyboardScrollBehavior": lambda v: v == "instant",
 }
 
 # Which render a diagnostics file came from, taken from its name. "system" first:
@@ -104,6 +112,131 @@ for path in sys.argv[1:]:
                   f"not tab or nbsp)")
     else:
         print(f"  FAIL {path}: no word count results")
+        failed = True
+    # The page tells the app when an input inside it has the keyboard, and the
+    # app stands its plain keys down while one does. A report that never arrives
+    # leaves that flag stuck: press `/`, type, click a file in the sidebar, and
+    # j k g G n N h l / ? are all dead with no beep to explain why.
+    if "PAGEFOCUS " in raw:
+        focus = json.loads(raw.split("PAGEFOCUS ", 1)[1].splitlines()[0])
+        problems = []
+        # One report as the page loads, so a reload (⌥⌘R sends no message of its
+        # own) re-syncs the app instead of inheriting a stale flag.
+        if focus["startup"] != [False]:
+            problems.append(f"no single false report at startup ({focus['startup']})")
+        # Focusing the find bar has to say so, or plain keys would type into it.
+        if focus["afterOpenFind"][len(focus["startup"]):] != [True]:
+            problems.append(f"opening the find bar did not report focus ({focus['afterOpenFind']})")
+        # And the window losing focus has to stand the flag down, which is the
+        # half focusin/focusout alone never covered.
+        if focus["afterBlur"][len(focus["afterOpenFind"]):] != [False]:
+            problems.append(f"a window blur did not report focus false ({focus['afterBlur']})")
+        for problem in problems:
+            print(f"  FAIL {path}: page focus — {problem}")
+        if problems:
+            failed = True
+        else:
+            print(f"  ok   {path}: page focus reported at startup, on the find bar, "
+                  f"and on a window blur")
+    else:
+        print(f"  FAIL {path}: no page focus results")
+        failed = True
+    # `n` at the end of the document, and `N` at the start, must not move. The
+    # clamp used to aim at the last (or first) heading instead of standing still,
+    # which past the final heading is a jump backwards — 329px in a document with
+    # a tail, and the whole document in one with a single heading.
+    #
+    # Two documents, rendered by the harness for this: sample.md's last heading
+    # sits close enough to the bottom that the scroll clamp swallows the bad jump,
+    # so it cannot see the bug at all.
+    if "STEPCLAMP " in raw:
+        clamps = json.loads(raw.split("STEPCLAMP ", 1)[1].splitlines()[0])
+        problems = []
+        for name, clamp in clamps.items():
+            if "error" in clamp:
+                problems.append(f"{name}: {clamp['error']}")
+                continue
+            # Without headroom below the last heading, "aim at the last heading"
+            # and "stand still" land on the same pixel and this proves nothing.
+            if clamp["bottomHeadroom"] < 200:
+                problems.append(f"{name}: only {clamp['bottomHeadroom']}px below the last "
+                                "heading — this document cannot show a backwards jump")
+            if clamp["afterNext"] != clamp["atBottom"]:
+                problems.append(f"{name}: n at the bottom moved "
+                                f"{clamp['afterNext'] - clamp['atBottom']}px")
+            if clamp["afterNextTwice"] != clamp["atBottom"]:
+                problems.append(f"{name}: a second n at the bottom moved to "
+                                f"{clamp['afterNextTwice']}")
+            if clamp["afterPrevious"] != clamp["atTop"]:
+                problems.append(f"{name}: N at the top moved "
+                                f"{clamp['afterPrevious'] - clamp['atTop']}px")
+            if clamp["afterPreviousTwice"] != clamp["atTop"]:
+                problems.append(f"{name}: a second N at the top moved to "
+                                f"{clamp['afterPreviousTwice']}")
+            # Without this the checks above pass for a step() that does nothing.
+            if clamp["afterOneStepFromTop"] <= clamp["atTop"]:
+                problems.append(f"{name}: n from the top did not move at all — stepping is "
+                                "broken, not clamped")
+        for problem in problems:
+            print(f"  FAIL {path}: heading step — {problem}")
+        if problems:
+            failed = True
+        else:
+            ends = ", ".join(f"{name} holds at y={c['atBottom']} with {c['bottomHeadroom']}px "
+                             f"below its last heading" for name, c in clamps.items())
+            print(f"  ok   {path}: n and N stand still at the ends ({ends})")
+    else:
+        print(f"  FAIL {path}: no heading step results")
+        failed = True
+    # Selecting across blocks used to paint the tint as full-window bands, 208px
+    # past the column on the left and 177px on the right. Nothing else in this
+    # file can see it: WebKit fills the gaps between a selection root's children
+    # out to that root's content box, `body` is the selection root and `.prose`
+    # is not — so the artefact is in the paint alone. Computed style is the same
+    # either way, and getClientRects() never leaves the column even while the
+    # bands are on screen. Hence a pixel diff: the same page shot unselected and
+    # selected, with every changed pixel outside the column counted.
+    if "SELECTION " in raw:
+        sel = json.loads(raw.split("SELECTION ", 1)[1].splitlines()[0])
+        problems = []
+        if "error" in sel:
+            problems.append(sel["error"])
+        else:
+            if sel["blocks"] < 4 or sel["chars"] <= 0:
+                problems.append(f"selected {sel['chars']} characters across {sel['blocks']} "
+                                "blocks — the gaps between blocks are what paint the bug")
+            # Vacuity: with no highlight painted the diff is empty and every
+            # check below passes for nothing. WebKit needs a key window and the
+            # web view as first responder to paint one at all.
+            if sel["insidePixels"] < 1000:
+                problems.append(f"only {sel['insidePixels']} pixels changed inside the column — "
+                                f"the selection did not paint (windowKey={sel['windowKey']}, "
+                                f"firstResponder={sel['firstResponder']}), so this check saw nothing")
+            # If the geometry itself left the column, the tint legitimately would
+            # too, and the count below would be measuring a different bug.
+            if (sel["rectsLeft"] < sel["columnLeft"] - 1
+                    or sel["rectsRight"] > sel["columnRight"] + 1):
+                problems.append(f"the selection's own rects ({sel['rectsLeft']}–{sel['rectsRight']}) "
+                                f"leave the column ({sel['columnLeft']}–{sel['columnRight']}) — "
+                                "that is a layout bug, not the paint one")
+            if sel["selectionGutterPixels"]:
+                problems.append(
+                    f"the tint reaches {sel['gutterLeftPx']}px past the column's left edge and "
+                    f"{sel['gutterRightPx']}px past its right "
+                    f"({sel['selectionGutterPixels']} device pixels: "
+                    f"{sel['gutterLeftPixels']} left, {sel['gutterRightPixels']} right). "
+                    f"body is `display: {sel['bodyDisplay']}` — a flex column paints no "
+                    "selection gaps; see style.css")
+        for problem in problems:
+            print(f"  FAIL {path}: selection tint — {problem}")
+        if problems:
+            failed = True
+        else:
+            print(f"  ok   {path}: selection tint stays inside the column "
+                  f"({sel['insidePixels']} pixels painted between {sel['columnLeft']} and "
+                  f"{sel['columnRight']}, 0 outside)")
+    else:
+        print(f"  FAIL {path}: no selection tint results")
         failed = True
     data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
     for key, ok in EXPECT.items():

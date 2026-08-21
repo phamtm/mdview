@@ -171,6 +171,13 @@ html {
 
 body {
   margin: 0;
+  /* Paint-only, and load-bearing: WebKit fills the gaps between a selection
+     root's children out to that root's content box, and `body` is the selection
+     root here (`.prose` is not). A flex container has no block gaps to fill, so
+     the selection tint hugs the line boxes instead of banding across the whole
+     viewport. Screen only — see @media print. */
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
@@ -898,6 +905,11 @@ body {
     --text: #201f1d;
     --surface: #f6f4f2;
     --divider: #d8d5d1;
+  }
+  /* The screen rule above is a selection-painting fix; nothing selects on
+     paper, and WebKit fragments flex containers badly across pages. */
+  body {
+    display: block;
   }
   .findbar,
   .empty,

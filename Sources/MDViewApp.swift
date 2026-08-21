@@ -171,5 +171,12 @@ struct ViewerCommands: Commands {
                         showFrontmatter = $0; send(.mdvSettingsChanged)
                     }))
         }
+
+        // So the vim keys are discoverable without already knowing `?`. No key
+        // equivalent of its own: `?` is in Shortcuts.all and does this, and a
+        // second binding here would be one the table does not know about.
+        CommandGroup(after: .help) {
+            Button("Keyboard Shortcuts") { send(.mdvShowShortcuts) }
+        }
     }
 }

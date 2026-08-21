@@ -14,6 +14,21 @@ echo "==> web bundle"
 ./build.sh >/dev/null
 echo "  ok   bundle built from web/src"
 
+# "auto" does not mean "no animation": it inherits `scroll-behavior: smooth`
+# from style.css rather than overriding it, which is how every keyboard motion
+# came to animate and how rapid presses lost most of their travel. Only
+# "instant" jumps. The keyboard paths take their value from the one constant in
+# web/src/motion.js, and tools/check-render.py asserts that constant is
+# "instant" — this covers the other way back in, a literal at a call site.
+# The leading class excludes comment lines — `*` in a block comment, `/` in a
+# line comment — so the prose explaining the trap does not trip it.
+if grep -nE '^[^*/]*behavior: *"auto"' web/src/*.js; then
+  echo "  FAIL the scroll above asks for \"auto\" — use KEYBOARD_SCROLL_BEHAVIOR" \
+    "(web/src/motion.js) for keyboard motion, or \"smooth\" for a mouse-driven jump"
+  exit 1
+fi
+echo "  ok   no scroll asks for \"auto\""
+
 echo "==> payload contract"
 ./tools/check-payload.sh
 
@@ -28,6 +43,28 @@ mkdir -p build/workspace-tool
 cp tools/test-workspace.swift build/workspace-tool/main.swift
 swiftc -O -o build/test-workspace $SRC build/workspace-tool/main.swift
 ./build/test-workspace
+
+echo "==> shortcut table and resolver"
+mkdir -p build/shortcuts-tool
+cp tools/test-shortcuts.swift build/shortcuts-tool/main.swift
+swiftc -O -o build/test-shortcuts $SRC build/shortcuts-tool/main.swift
+./build/test-shortcuts
+
+echo "==> key delivery (offscreen window, synthesised events)"
+mkdir -p build/keys-tool
+cp tools/test-key-delivery.swift build/keys-tool/main.swift
+swiftc -O -o build/test-key-delivery $SRC build/keys-tool/main.swift
+./build/test-key-delivery
+
+echo "==> panels slide, from every path (offscreen window, sampled widths)"
+# An animation is hard to assert on, so this samples the drawn width every 10ms
+# and counts the values between the two ends. It is here because the *thing* it
+# catches is silent: the titlebar buttons toggled the panels with no animation at
+# all while the keys animated, and nothing in the code read wrong.
+mkdir -p build/anim-tool
+cp tools/test-panel-animation.swift build/anim-tool/main.swift
+swiftc -O -o build/test-panel-animation $SRC build/anim-tool/main.swift
+./build/test-panel-animation
 
 echo "==> window chrome (real app)"
 ./tools/check-window-chrome.sh
@@ -103,7 +140,7 @@ CHECK
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist
 # named after each executable. cfprefsd owns those files and rewrites them after a
 # process exits, so ask the daemon to drop the domains rather than deleting files.
-for domain in test-workspace snapshot-window snapshot; do
+for domain in test-workspace snapshot-window snapshot test-panel-animation; do
   defaults delete "$domain" >/dev/null 2>&1 || true
   rm -f "$HOME/Library/Preferences/$domain.plist"
 done

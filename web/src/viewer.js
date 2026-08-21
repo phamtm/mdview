@@ -7,6 +7,7 @@ import markedFootnote from "marked-footnote";
 import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 import { createRail } from "./rail.js";
+import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
 (function () {
   "use strict";
@@ -663,6 +664,10 @@ import { createRail } from "./rail.js";
   }
 
   function closeFind() {
+    // Blur before hiding, so the focusout below always fires and the app's
+    // plain-key shortcuts come back. Hiding a focused element ought to blur it
+    // anyway, but if it ever did not, every plain key would stay disabled.
+    elFind.blur();
     elBar.hidden = true;
     elBar.classList.remove("nomatch");
     const sel = window.getSelection();
@@ -699,16 +704,102 @@ import { createRail } from "./rail.js";
 
   elEmpty.addEventListener("click", () => post({ action: "openPanel" }));
 
+  // --- focus, so the app knows when a keystroke is ours ----------------------
+
+  /* The chrome's plain-key shortcuts (j, k, n, /, esc) have to stand down while
+     the find bar has focus, and Swift cannot see inside the page — so the page
+     reports it. Focus, not the first keystroke: the keystroke is the one that
+     would have been swallowed. */
+  const TEXT_ENTRY = 'input:not([type="checkbox"]), textarea, [contenteditable="true"]';
+  const reportFocus = (focused) => post({ action: "pageFocus", focused });
+  const inputHasFocus = () => {
+    const node = document.activeElement;
+    return !!node && node.nodeType === 1 && node.matches(TEXT_ENTRY);
+  };
+  document.addEventListener("focusin", (e) => {
+    const node = e.target;
+    reportFocus(!!node && node.nodeType === 1 && node.matches(TEXT_ENTRY));
+  });
+  document.addEventListener("focusout", () => reportFocus(false));
+
+  /* focusin/focusout alone leave the flag stuck on. Moving first responder out
+     of the web view — clicking the sidebar's search field, a file row, a
+     contents row — fires no focusout at all: the find bar keeps DOM focus, so
+     Swift went on believing an input had it and every plain key (j k g G n N h l
+     / ?) died silently with not even a beep to explain why.
+     The window's own blur is the event that does fire, so it is what stands
+     the flag down; window focus puts back whatever is true then. */
+  window.addEventListener("blur", () => reportFocus(false));
+  window.addEventListener("focus", () => reportFocus(inputHasFocus()));
+  /* And once now, so a page that has just loaded re-syncs Swift's copy. ⌥⌘R
+     (reloadFromOrigin) sends no message of its own, and a reload with the find
+     bar open used to leave the flag true for good. */
+  reportFocus(inputHasFocus());
+
+  // --- moving about, for the chrome's keyboard shortcuts ---------------------
+
+  /**
+   * Half the window, so a page turn always leaves half a screen of overlap.
+   *
+   * `KEYBOARD_SCROLL_BEHAVIOR`, so it jumps. Two reasons. A smooth `scrollBy`
+   * retargets from wherever the running animation has got to, so pressing `j`
+   * five times quickly covers less ground than five presses; and the reader is
+   * turning a page, not being taken somewhere, so there is nothing to follow
+   * with the eye. Mouse-driven heading jumps do animate — see the rail —
+   * because there the distance is the point.
+   *
+   * `"auto"` would not do: it inherits `scroll-behavior: smooth` from the
+   * stylesheet rather than overriding it. See ./motion.js.
+   */
+  function scrollHalfPage(direction) {
+    window.scrollBy({
+      top: (direction * window.innerHeight) / 2,
+      behavior: KEYBOARD_SCROLL_BEHAVIOR,
+    });
+  }
+
+  /**
+   * The end of the document (+1) or its start (-1). A jump, for the same reason:
+   * animating the whole length of a long document is a wait, not a transition.
+   */
+  function scrollToEdge(direction) {
+    const bottom = document.documentElement.scrollHeight;
+    window.scrollTo({
+      top: direction > 0 ? bottom : 0,
+      behavior: KEYBOARD_SCROLL_BEHAVIOR,
+    });
+  }
+
   window.mdview = {
     render,
     openFind,
+    /** Escape from the chrome. A no-op unless the find bar is actually open. */
+    dismissFind() {
+      if (!elBar.hidden) closeFind();
+    },
     /** The contents panel in the chrome asks for a jump by index. */
     scrollToHeading(index) {
       rail.jumpTo(Number(index));
     },
+    scrollHalfPage(direction) {
+      scrollHalfPage(Number(direction));
+    },
+    scrollToEdge(direction) {
+      scrollToEdge(Number(direction));
+    },
+    /** The next heading (+1) or the previous one (-1). The rail owns the list. */
+    stepHeading(direction) {
+      rail.step(Number(direction));
+    },
     // Exposed so the test harness can exercise the parser and the word count
-    // directly.
-    _internals: { splitFrontmatter, parseFields, countWords },
+    // directly — and so it can assert the one decision that no offscreen render
+    // can observe: keyboard motion jumps rather than animates. See ./motion.js.
+    _internals: {
+      splitFrontmatter,
+      parseFields,
+      countWords,
+      keyboardScrollBehavior: KEYBOARD_SCROLL_BEHAVIOR,
+    },
     /** Called by the app when the system appearance changes. */
     refreshDiagrams() {
       if (diagrams.length) drawDiagrams(renderToken);

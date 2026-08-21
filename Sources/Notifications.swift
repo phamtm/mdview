@@ -20,4 +20,19 @@ extension Notification.Name {
     static let mdvToggleOutline = Notification.Name("mdv.toggleOutline")
     /// Carries the heading index as its object.
     static let mdvScrollToHeading = Notification.Name("mdv.scrollToHeading")
+
+    // The keyboard shortcuts. The page owns scrolling and the outline, so these
+    // ask it rather than computing anything; each carries ±1 as its object.
+    /// A half page down (+1) or up (-1).
+    static let mdvScrollHalfPage = Notification.Name("mdv.scrollHalfPage")
+    /// The end of the document (+1) or its start (-1).
+    static let mdvScrollToEdge = Notification.Name("mdv.scrollToEdge")
+    /// The next heading (+1) or the previous one (-1).
+    static let mdvStepHeading = Notification.Name("mdv.stepHeading")
+    /// Escape from the chrome: closes the page's find bar if it is open.
+    static let mdvDismissFind = Notification.Name("mdv.dismissFind")
+    /// Opens the shortcuts overlay; handled by `ViewerView`.
+    static let mdvShowShortcuts = Notification.Name("mdv.showShortcuts")
+    /// Carries a Bool: an input inside the page took or lost focus.
+    static let mdvPageInputFocus = Notification.Name("mdv.pageInputFocus")
 }

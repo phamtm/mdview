@@ -7,6 +7,8 @@
  * this rail reports the headings to it.
  */
 
+import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
+
 const SNIPPET_CHARS = 116;
 /** Tick length by heading level, before any hover swell. */
 const TICK_WIDTH = { 1: 26, 2: 17, 3: 11 };
@@ -53,10 +55,25 @@ export function createRail(post) {
     }
   }
 
-  function jumpTo(index) {
-    const heading = headings[index];
-    if (!heading) return;
-    window.scrollTo({ top: Math.max(0, heading.top - SCROLL_OFFSET), behavior: "smooth" });
+  /** Where `index` lands: the heading, with room above it to read as a heading. */
+  function landingFor(index) {
+    return Math.max(0, headings[index].top - SCROLL_OFFSET);
+  }
+
+  /**
+   * Animated by default, for a click: that is one jump at a time and worth
+   * following with the eye. `step` passes `KEYBOARD_SCROLL_BEHAVIOR` instead,
+   * which is "instant" — a keyboard walk is repeated, and a smooth scroll still
+   * in flight makes the next press re-aim from wherever the animation had got
+   * to rather than from the heading just landed on.
+   *
+   * Note "auto" is not the way to ask for that: it inherits `scroll-behavior`
+   * from the stylesheet, which is `smooth`, rather than overriding it. See
+   * ./motion.js.
+   */
+  function jumpTo(index, behavior = "smooth") {
+    if (!headings[index]) return;
+    window.scrollTo({ top: landingFor(index), behavior });
   }
 
   function showCard(index) {
@@ -163,5 +180,32 @@ export function createRail(post) {
 
     /** Called by the app when a row in the contents panel is clicked. */
     jumpTo,
+
+    /**
+     * The heading after the reader's position (+1) or before it (-1).
+     *
+     * Measured against where `jumpTo` would land, so pressing `n` twice moves
+     * twice; the 1px slack absorbs a fractional scroll position. Uses the same
+     * list the rail and the contents panel draw from, so all three agree on what
+     * a heading is.
+     *
+     * At either end it does nothing. "Nothing", not "the last heading": past the
+     * final heading, aiming at the last one is a jump *backwards* — at the bottom
+     * of a one-heading document that threw the reader from y=7043 to y=16.
+     */
+    step(direction) {
+      if (!headings.length) return;
+      const y = window.scrollY;
+      let target = -1;
+      if (direction > 0) {
+        target = headings.findIndex((_, index) => landingFor(index) > y + 1);
+      } else {
+        headings.forEach((_, index) => {
+          if (landingFor(index) < y - 1) target = index;
+        });
+      }
+      if (target < 0) return;
+      jumpTo(target, KEYBOARD_SCROLL_BEHAVIOR);
+    },
   };
 }

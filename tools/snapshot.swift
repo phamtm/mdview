@@ -37,6 +37,10 @@ final class MessageRecorder: NSObject, WKScriptMessageHandler {
     private(set) var outlineTitles = ""
     /// The titlebar's word count, which the page reports with the frontmatter.
     private(set) var wordCount = -1
+    /// Every `pageFocus` the page reported, in order. This is what tells Swift
+    /// whether the app's plain keys are allowed to act, so a report that never
+    /// arrives leaves j/k/n dead — see tools/check-render.py.
+    private(set) var focusReports: [Bool] = []
 
     func userContentController(
         _ controller: WKUserContentController, didReceive message: WKScriptMessage
@@ -53,12 +57,22 @@ final class MessageRecorder: NSObject, WKScriptMessageHandler {
         if action == "frontmatter" {
             wordCount = body["words"] as? Int ?? -1
         }
+        if action == "pageFocus" {
+            focusReports.append(body["focused"] as? Bool ?? false)
+        }
     }
+}
+
+/// A borderless window refuses to become key, and WebKit paints no selection
+/// highlight in a window that is not — see checkSelectionGutter().
+final class KeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 final class Runner: NSObject, WKNavigationDelegate {
     let webView: WKWebView
-    let window: NSWindow
+    let window: KeyableWindow
     let markdown: String
 
     override init() {
@@ -71,7 +85,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         let pageWidth = Double(ProcessInfo.processInfo.environment["MDVIEW_WIDTH"] ?? "") ?? 900
         webView = WKWebView(
             frame: NSRect(x: 0, y: 0, width: pageWidth, height: 1200), configuration: config)
-        window = NSWindow(
+        window = KeyableWindow(
             contentRect: NSRect(x: -20000, y: -20000, width: pageWidth, height: 1200),
             styleMask: [.borderless], backing: .buffered, defer: false)
         markdown = (try? String(contentsOf: mdURL, encoding: .utf8)) ?? ""
@@ -184,7 +198,13 @@ final class Runner: NSObject, WKNavigationDelegate {
               footnoteItems: document.querySelectorAll('#doc section.footnotes li, #doc .footnotes li').length,
               autolinks: Array.from(document.querySelectorAll('#doc a'))
                 .filter(function (a) { return /github\\.com|example\\.com/.test(a.href); }).length,
-              strikethrough: document.querySelectorAll('#doc del').length
+              strikethrough: document.querySelectorAll('#doc del').length,
+              // The one decision about keyboard motion, read straight off the
+              // page. It cannot be checked by watching a scroll here: this
+              // window is offscreen, so requestAnimationFrame never fires and
+              // every scroll is instant whatever was asked for. See
+              // web/src/motion.js.
+              keyboardScrollBehavior: window.mdview._internals.keyboardScrollBehavior
             })
             """
         webView.evaluateJavaScript(probe) { value, error in
@@ -282,7 +302,416 @@ final class Runner: NSObject, WKNavigationDelegate {
                         print(
                             "wrote \(out.path) \(Int(image.size.width))x\(Int(image.size.height))")
                     }
-                    self.renderAgain()
+                    self.checkFocusReporting()
+                }
+            }
+        }
+    }
+
+    /// What the page told the app about its own focus, which is what decides
+    /// whether the app's plain keys act at all.
+    ///
+    /// Two things are checked, and only the second is synthesised. The startup
+    /// report is real: the page sends it as it loads, which is what re-syncs
+    /// Swift after ⌥⌘R (`reloadFromOrigin` sends no message of its own). The
+    /// window blur is dispatched by hand, because this window is offscreen and
+    /// never key, so WebKit has no real focus change to give us — what that half
+    /// covers is the listener being wired up at all, which is precisely what was
+    /// missing: without it, moving first responder out of the web view left the
+    /// flag stuck true and every plain key silently dead.
+    ///
+    /// Deliberately after the PNG: openFind() shows the find bar.
+    func checkFocusReporting() {
+        let startup = MessageRecorder.shared.focusReports
+        webView.evaluateJavaScript("window.mdview.openFind(); 'ok'") { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                let afterFocus = MessageRecorder.shared.focusReports
+                self.webView.evaluateJavaScript("window.dispatchEvent(new Event('blur')); 'ok'") {
+                    _, _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        let afterBlur = MessageRecorder.shared.focusReports
+                        func list(_ values: [Bool]) -> String {
+                            "[" + values.map { $0 ? "true" : "false" }.joined(separator: ",") + "]"
+                        }
+                        print(
+                            "PAGEFOCUS {\"startup\":\(list(startup)),"
+                                + "\"afterOpenFind\":\(list(afterFocus)),"
+                                + "\"afterBlur\":\(list(afterBlur))}")
+                        self.webView.evaluateJavaScript("window.mdview.dismissFind(); 'ok'") {
+                            _, _ in self.renderAgain()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// `n` at the end of the document and `N` at the start: neither may move.
+    ///
+    /// The clamp used to aim at the last (or first) heading instead of standing
+    /// still, and past the final heading that is a jump *backwards*: 329px in a
+    /// document with a tail after its last heading, and the whole document —
+    /// 7043px down to 16 — in one with a single heading.
+    ///
+    /// Neither case is in sample.md, whose last heading is close enough to the
+    /// bottom that the bad jump is swallowed by the scroll clamp, so this renders
+    /// two documents of its own. It runs last, after the PNG and after the
+    /// re-render checks, because it leaves its own document on the page; and it
+    /// shrinks the window first, since `shoot()` grew it to the whole document's
+    /// height and a page that cannot scroll cannot show this bug at all.
+    ///
+    /// Every scroll here asks for "instant" itself, so what is measured is the
+    /// clamp and not the behaviour the page chose.
+    static let tailMarkdown: String = {
+        // Long enough that a jump to the last heading is visibly backwards
+        // rather than swallowed by the scroll clamp; check-render.py asserts the
+        // headroom so this cannot quietly stop being true.
+        let filler = (0..<30).map { "Tail paragraph \($0), well below the last heading." }
+            .joined(separator: "\n\n")
+        return """
+            # Clamp Document
+
+            ## Alpha
+
+            Body text for alpha.
+
+            ## Beta
+
+            Body text for beta.
+
+            ## Gamma
+
+            \(filler)
+            """
+    }()
+
+    static let oneHeadingMarkdown: String = {
+        let filler = (0..<40).map { "Paragraph \($0) of a document with a single heading." }
+            .joined(separator: "\n\n")
+        return "# Only Heading\n\n\(filler)"
+    }()
+
+    func checkHeadingClamp() {
+        window.setContentSize(NSSize(width: 900, height: 700))
+        webView.frame = NSRect(x: 0, y: 0, width: 900, height: 700)
+        measureClamp(Runner.tailMarkdown, name: "clamp-tail.md") { tail in
+            self.measureClamp(Runner.oneHeadingMarkdown, name: "clamp-one.md") { one in
+                print("STEPCLAMP {\"tail\":\(tail),\"oneHeading\":\(one)}")
+                self.checkSelectionGutter()
+            }
+        }
+    }
+
+    // MARK: - Selection tint stays inside the column
+
+    /// Four paragraphs, each long enough to wrap, so a selection across them has
+    /// real gaps between blocks — which is the only thing that paints the bug.
+    static let selectionMarkdown: String = {
+        let body = (0..<5).map {
+            "Paragraph \($0) of the selection document, written long enough that it "
+                + "wraps onto a second line, so the space between its line boxes and the "
+                + "space between it and the next block are both real."
+        }.joined(separator: "\n\n")
+        return "# Selection\n\n\(body)"
+    }()
+
+    /// The selection tint must not spill out of the text column.
+    ///
+    /// The only *paint* check in the suite, and it has to be: nothing about this
+    /// artefact reaches computed style or geometry. `Range.getClientRects()`
+    /// stays inside the column even while the tint bands across the whole
+    /// window, because what paints those bands is WebKit's selection gap
+    /// filling — the gaps between a selection root's children, filled out to
+    /// that root's content box. `body` is a selection root and `.prose` is not,
+    /// so the bands ran the full viewport: 208px past the column on the left and
+    /// 177px on the right. `body { display: flex }` in style.css is what removes
+    /// them, a flex container having no block gaps to fill.
+    ///
+    /// So: snapshot the page, select across four blocks, snapshot again, and
+    /// count the pixels that changed outside the column's content box.
+    ///
+    /// Three ways this could pass while seeing nothing, each guarded:
+    ///   * with no highlight painted at all the diff is trivially empty, so the
+    ///     window is asked to become key and the web view made first responder
+    ///     before anything is shot — and both flags are reported, because a `windowKey` of false
+    ///     is the first thing to look at if the diff ever comes back empty. What
+    ///     actually makes that failure loud rather than silent is
+    ///     `insidePixels`, which check-render.py requires to be positive;
+    ///   * `window.find` replaces the selection, so nothing here may call it;
+    ///   * `takeSnapshot` hands back stale frames — measured here as the
+    ///     pre-selection image coming back twice in a row, in two runs out of
+    ///     three — so each shot is repeated until the page settles, and the
+    ///     selected frame has to actually differ from the baseline.
+    ///
+    /// Runs last. It makes the window key, which posts another pageFocus, and it
+    /// renders a document of its own — both of which earlier checks read.
+    func checkSelectionGutter() {
+        window.setContentSize(NSSize(width: 900, height: 700))
+        webView.frame = NSRect(x: 0, y: 0, width: 900, height: 700)
+        let dir = mdURL.deletingLastPathComponent()
+        let payload = RenderPayload(
+            markdown: Runner.selectionMarkdown,
+            path: dir.appendingPathComponent("selection.md").path, dir: dir.path,
+            name: "selection.md", error: "", showFrontmatter: showFrontmatter,
+            theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
+        guard let call = payload.renderCall else {
+            print("SELECTION {\"error\":\"payload encode failed\"}")
+            app.terminate(nil)
+            return
+        }
+        webView.evaluateJavaScript(call + " 'ok'") { _, error in
+            if let error { print("SELECTION render error: \(error)") }
+            // Without focus WebKit paints no highlight, and the diff below would
+            // be empty for the wrong reason.
+            self.window.makeKeyAndOrderFront(nil)
+            let responder = self.window.makeFirstResponder(self.webView)
+            let key = self.window.isKeyWindow
+            // Long enough for the column's fade-in to finish, or the baseline
+            // shot differs from the second everywhere.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self.webView.evaluateJavaScript(
+                    "window.scrollTo({ top: 0, behavior: 'instant' }); 'ok'"
+                ) { _, _ in
+                    self.settledFrame(differingFrom: nil) { before, _ in
+                        self.selectAcrossBlocks { info in
+                            self.settledFrame(differingFrom: before) { after, tries in
+                                self.reportSelectionGutter(
+                                    info: info, before: before, after: after, shots: tries,
+                                    windowKey: key, firstResponder: responder)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One snapshot, in pixels of our own so nothing depends on the format
+    /// WebKit handed back.
+    private struct Frame: Equatable {
+        let width: Int
+        let height: Int
+        let bytes: [UInt8]
+    }
+
+    /// Shoots until the page holds still — two identical shots in a row — and,
+    /// when a `baseline` is given, until the result also differs from it.
+    ///
+    /// Both halves are needed. `takeSnapshot` will hand back the previous frame:
+    /// without the second half a selection that painted perfectly reads as
+    /// nothing painted at all, and without the first a baseline caught mid-paint
+    /// reads as the whole page having changed.
+    private func settledFrame(
+        differingFrom baseline: Frame?, previous: Frame? = nil, shot: Int = 1,
+        done: @escaping (Frame?, Int) -> Void
+    ) {
+        let config = WKSnapshotConfiguration()
+        config.rect = webView.bounds
+        config.snapshotWidth = NSNumber(value: Int(webView.bounds.width))
+        webView.takeSnapshot(with: config) { image, error in
+            if let error { print("SELECTION snapshot error: \(error)") }
+            let frame = self.frame(image)
+            let settled = frame != nil && frame == previous
+            let moved = baseline == nil || (frame != nil && frame != baseline)
+            // 14 shots at 0.25s is 3.5s of patience. Past that, hand back what
+            // we have: the counts then fail loudly rather than hanging here.
+            if (settled && moved) || shot >= 14 {
+                done(frame, shot)
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                self.settledFrame(
+                    differingFrom: baseline, previous: frame, shot: shot + 1, done: done)
+            }
+        }
+    }
+
+    /// Selects across four sibling blocks and reports the column's content box,
+    /// measured live: the measure is a user setting, so the edges cannot be
+    /// hardcoded. Deliberately no `window.find` anywhere near this — it replaces
+    /// the selection, and the artefact vanishes with it.
+    private func selectAcrossBlocks(_ done: @escaping ([String: Any]) -> Void) {
+        let script = """
+            (function () {
+              const doc = document.getElementById('doc');
+              const blocks = doc.querySelectorAll(':scope > p');
+              if (blocks.length < 4) {
+                return JSON.stringify({ error: 'only ' + blocks.length + ' blocks to select' });
+              }
+              const last = blocks[3];
+              const range = document.createRange();
+              range.setStart(blocks[0], 0);
+              range.setEnd(last, last.childNodes.length);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              const box = doc.getBoundingClientRect();
+              const style = getComputedStyle(doc);
+              let rectsLeft = box.right, rectsRight = box.left;
+              for (const rect of range.getClientRects()) {
+                if (!rect.width || !rect.height) continue;
+                rectsLeft = Math.min(rectsLeft, rect.left);
+                rectsRight = Math.max(rectsRight, rect.right);
+              }
+              const round = (n) => Math.round(n * 100) / 100;
+              return JSON.stringify({
+                blocks: 4,
+                chars: sel.toString().length,
+                columnLeft: round(box.left + parseFloat(style.paddingLeft)),
+                columnRight: round(box.right - parseFloat(style.paddingRight)),
+                rectsLeft: round(rectsLeft),
+                rectsRight: round(rectsRight),
+                bodyDisplay: getComputedStyle(document.body).display,
+              });
+            })()
+            """
+        webView.evaluateJavaScript(script) { value, error in
+            if let error { print("SELECTION probe error: \(error)") }
+            let raw = (value as? String) ?? ""
+            let object =
+                (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
+            done(object ?? ["error": "no selection probe result"])
+        }
+    }
+
+    private func frame(_ image: NSImage?) -> Frame? {
+        var rect = CGRect(origin: .zero, size: image?.size ?? .zero)
+        guard let image,
+            let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        else { return nil }
+        let width = cg.width, height = cg.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        guard
+            let context = CGContext(
+                data: &bytes, width: width, height: height, bitsPerComponent: 8,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return nil }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return Frame(width: width, height: height, bytes: bytes)
+    }
+
+    private func reportSelectionGutter(
+        info: [String: Any], before: Frame?, after: Frame?, shots: Int, windowKey: Bool,
+        firstResponder: Bool
+    ) {
+        func fail(_ message: String) {
+            print("SELECTION {\"error\":\"\(message)\"}")
+            app.terminate(nil)
+        }
+        if let error = info["error"] as? String { return fail(error) }
+        guard let a = before, let b = after else {
+            return fail("could not read the snapshots")
+        }
+        guard a.width == b.width, a.height == b.height, a.width > 0 else {
+            return fail(
+                "snapshots differ in size (\(a.width)x\(a.height) vs \(b.width)x\(b.height))")
+        }
+        guard let columnLeft = info["columnLeft"] as? Double,
+            let columnRight = info["columnRight"] as? Double
+        else { return fail("no column bounds") }
+        // The snapshot is in device pixels and the column in CSS pixels.
+        let scale = Double(a.width) / Double(webView.bounds.width)
+        // Rounded outwards, so a single antialiased pixel on the column's own
+        // edge is not read as a gutter — the bands this exists for are hundreds
+        // of pixels wide.
+        let leftEdge = Int((columnLeft * scale).rounded(.down))
+        let rightEdge = Int((columnRight * scale).rounded(.up))
+        var inside = 0, left = 0, right = 0
+        var minX = a.width, maxX = -1
+        for y in 0..<a.height {
+            let row = y * a.width * 4
+            for x in 0..<a.width {
+                let i = row + x * 4
+                if a.bytes[i] == b.bytes[i] && a.bytes[i + 1] == b.bytes[i + 1]
+                    && a.bytes[i + 2] == b.bytes[i + 2]
+                {
+                    continue
+                }
+                if x < leftEdge {
+                    left += 1
+                } else if x >= rightEdge {
+                    right += 1
+                } else {
+                    inside += 1
+                }
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+            }
+        }
+        let fields: [String] = [
+            "\"blocks\":\(info["blocks"] as? Int ?? -1)",
+            "\"chars\":\(info["chars"] as? Int ?? -1)",
+            "\"bodyDisplay\":\"\(info["bodyDisplay"] as? String ?? "?")\"",
+            "\"columnLeft\":\(columnLeft)", "\"columnRight\":\(columnRight)",
+            "\"rectsLeft\":\(info["rectsLeft"] as? Double ?? -1)",
+            "\"rectsRight\":\(info["rectsRight"] as? Double ?? -1)",
+            "\"scale\":\(scale)", "\"shots\":\(shots)",
+            "\"windowKey\":\(windowKey)", "\"firstResponder\":\(firstResponder)",
+            "\"insidePixels\":\(inside)",
+            "\"gutterLeftPixels\":\(left)", "\"gutterRightPixels\":\(right)",
+            "\"selectionGutterPixels\":\(left + right)",
+            // In CSS pixels, so a failure reads in the same units as the design.
+            "\"gutterLeftPx\":\(minX <= maxX ? max(0, Int((Double(leftEdge - minX) / scale).rounded())) : 0)",
+            "\"gutterRightPx\":\(minX <= maxX ? max(0, Int((Double(maxX - rightEdge + 1) / scale).rounded())) : 0)",
+        ]
+        print("SELECTION {\(fields.joined(separator: ","))}")
+        app.terminate(nil)
+    }
+
+    /// Renders `markdown` and reports what `n` and `N` do at either end of it.
+    private func measureClamp(
+        _ markdown: String, name: String, then: @escaping (String) -> Void
+    ) {
+        let dir = mdURL.deletingLastPathComponent()
+        let payload = RenderPayload(
+            markdown: markdown, path: dir.appendingPathComponent(name).path, dir: dir.path,
+            name: name, error: "", showFrontmatter: showFrontmatter, theme: firstTheme,
+            size: "regular", alignment: alignment, measure: measure)
+        guard let call = payload.renderCall else {
+            then("{\"error\":\"payload encode failed\"}")
+            return
+        }
+        let script = """
+            (function () {
+              const jump = (top) => window.scrollTo({ top, behavior: 'instant' });
+              const at = () => Math.round(window.scrollY);
+              const headings = document.querySelectorAll('#doc h1, #doc h2, #doc h3');
+              const last = headings[headings.length - 1];
+              const lastLanding = last
+                ? Math.max(0, Math.round(last.getBoundingClientRect().top + window.scrollY - 56))
+                : -1;
+              jump(document.documentElement.scrollHeight);
+              const atBottom = at();
+              window.mdview.stepHeading(1);
+              const afterNext = at();
+              window.mdview.stepHeading(1);
+              const afterNextTwice = at();
+              jump(0);
+              const atTop = at();
+              window.mdview.stepHeading(-1);
+              const afterPrevious = at();
+              window.mdview.stepHeading(-1);
+              const afterPreviousTwice = at();
+              // The clamp must not have turned stepping off altogether.
+              window.mdview.stepHeading(1);
+              const afterOneStepFromTop = at();
+              return JSON.stringify({
+                headings: headings.length,
+                // How far a jump to the last heading would take the reader back
+                // up. Zero means this document cannot show the bug.
+                bottomHeadroom: atBottom - lastLanding,
+                atBottom, afterNext, afterNextTwice,
+                atTop, afterPrevious, afterPreviousTwice, afterOneStepFromTop,
+              });
+            })()
+            """
+        webView.evaluateJavaScript(call + " 'ok'") { _, error in
+            if let error { print("STEPCLAMP render error (\(name)): \(error)") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.webView.evaluateJavaScript(script) { value, error in
+                    if let error { print("STEPCLAMP probe error (\(name)): \(error)") }
+                    then((value as? String) ?? "{\"error\":\"no value\"}")
                 }
             }
         }
@@ -372,7 +801,7 @@ final class Runner: NSObject, WKNavigationDelegate {
         webView.evaluateJavaScript(probe) { value, error in
             if let error { print("RERENDER probe error: \(error)") }
             if let s = value as? String { print("RERENDER \(s)") }
-            app.terminate(nil)
+            self.checkHeadingClamp()
         }
     }
 }
