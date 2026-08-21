@@ -7,6 +7,8 @@ import markedFootnote from "marked-footnote";
 import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 import { createRail } from "./rail.js";
+import { countWords, frontmatterHeader, panelFields, splitFrontmatter } from "./frontmatter.js";
+import { createFindBar } from "./find.js";
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
 (function () {
@@ -20,8 +22,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   const elDoc = document.getElementById("doc");
   const elEmpty = document.getElementById("empty");
-  const elBar = document.getElementById("findbar");
-  const elFind = document.getElementById("findinput");
+  const find = createFindBar();
 
   let current = { path: "", dir: "" };
   let renderToken = 0; // guards async mermaid work against a newer render
@@ -92,110 +93,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     }
     seen.add(id);
     return id;
-  }
-
-  // --- frontmatter ----------------------------------------------------------
-
-  /** Split a leading `---` (YAML) or `+++` (TOML) block off the document. */
-  function splitFrontmatter(text) {
-    const match = /^\uFEFF?(---|\+\+\+)[ \t]*\r?\n([\s\S]*?)\r?\n?\1[ \t]*(?:\r?\n|$)/.exec(text);
-    if (!match) return { fields: [], body: text };
-    return { fields: parseFields(match[2]), body: text.slice(match[0].length) };
-  }
-
-  /**
-   * Runs of anything that is not a space or a newline. The class is Swift's
-   * `Character.isNewline` set, so the number matches what the titlebar showed
-   * when Swift counted the raw file. A tab is deliberately not a separator.
-   * tools/wordcount-tests.js pins the whole set.
-   */
-  function countWords(text) {
-    return (text.match(/[^ \n\r\u000b\u000c\u0085\u2028\u2029]+/g) || []).length;
-  }
-
-  function unquote(value) {
-    return value
-      .trim()
-      .replace(/,$/, "")
-      .trim()
-      .replace(/^(['"])([\s\S]*)\1$/, "$2")
-      .trim();
-  }
-
-  /**
-   * Reads the flat `key: value` shape that frontmatter almost always uses:
-   * scalars, inline `[a, b]` lists and `- item` block lists. Nested maps are
-   * skipped rather than guessed at — this is deliberately not a YAML parser.
-   */
-  function parseFields(raw) {
-    const lines = raw.split(/\r?\n/);
-    const fields = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim() || /^\s*#/.test(line)) continue;
-      const match = /^([A-Za-z0-9_.\-]+)\s*[:=]\s*(.*)$/.exec(line);
-      if (!match) continue; // indented sub-keys, etc.
-      const key = match[1];
-      const value = match[2].trim();
-
-      if (!value) {
-        const items = [];
-        while (i + 1 < lines.length && /^\s*-\s+/.test(lines[i + 1])) {
-          items.push(unquote(lines[++i].replace(/^\s*-\s+/, "")));
-        }
-        if (items.length) fields.push([key, items.filter(Boolean)]);
-        continue; // a bare key holds a nested map
-      }
-      if (/^\[[\s\S]*\]$/.test(value)) {
-        fields.push([key, value.slice(1, -1).split(",").map(unquote).filter(Boolean)]);
-      } else {
-        fields.push([key, unquote(value)]);
-      }
-    }
-    return fields;
-  }
-
-  const DOCUMENT_FIELDS = ["title", "subtitle"];
-
-  /**
-   * Builds the header shown above the document: the title, and a subtitle if
-   * there is one. The remaining fields go to the titlebar disclosure — showing
-   * them in both places at once just duplicates the metadata.
-   * Values are set as text, never HTML.
-   */
-  function frontmatterHeader(fields, firstBodyHeading) {
-    const header = document.createElement("header");
-    header.className = "frontmatter";
-
-    const titleIndex = fields.findIndex(([key]) => key.toLowerCase() === "title");
-    const rest = fields.slice();
-    // Don't print the title twice when the body already opens with it.
-    if (titleIndex >= 0) {
-      const [, value] = rest[titleIndex];
-      const text = Array.isArray(value) ? value.join(", ") : value;
-      if (text && text.trim() !== (firstBodyHeading || "").trim()) {
-        const h1 = document.createElement("h1");
-        h1.className = "fm-title";
-        h1.textContent = text;
-        header.appendChild(h1);
-      }
-      rest.splice(titleIndex, 1);
-    }
-
-    const subtitleIndex = rest.findIndex(([key]) => key.toLowerCase() === "subtitle");
-    if (subtitleIndex >= 0) {
-      const [, value] = rest[subtitleIndex];
-      const text = Array.isArray(value) ? value.join(", ") : value;
-      if (text) {
-        const line = document.createElement("p");
-        line.className = "fm-subtitle";
-        line.textContent = text;
-        header.appendChild(line);
-      }
-      rest.splice(subtitleIndex, 1);
-    }
-
-    return header.childElementCount ? header : null;
   }
 
   // --- GitHub alerts --------------------------------------------------------
@@ -529,6 +426,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   // --- appearance -----------------------------------------------------------
 
   const rail = createRail(post);
+  elEmpty.addEventListener("click", () => post({ action: "openPanel" }));
 
   const THEMES = ["paper", "vellum", "night"];
   const SIZES = ["small", "regular", "large"];
@@ -609,13 +507,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       // not one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it.
       words: countWords(split.body),
       // Title and subtitle are already on the page as the document's own head.
-      fields: split.fields
-        .filter(([name]) => !DOCUMENT_FIELDS.includes(name.toLowerCase()))
-        .map(([name, value]) => ({
-          name,
-          values: Array.isArray(value) ? value : [value],
-          isList: Array.isArray(value),
-        })),
+      fields: panelFields(split.fields),
     });
 
     const dirty = marked.parse(split.body);
@@ -652,55 +544,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     rail.update(elDoc);
     drawDiagrams(token);
   }
-
-  // --- find bar ------------------------------------------------------------
-
-  function openFind() {
-    elBar.hidden = false;
-    elFind.focus();
-    elFind.select();
-  }
-
-  function closeFind() {
-    // Blur before hiding, so the focusout below always fires and the app's
-    // plain-key shortcuts come back. Hiding a focused element ought to blur it
-    // anyway, but if it ever did not, every plain key would stay disabled.
-    elFind.blur();
-    elBar.hidden = true;
-    elBar.classList.remove("nomatch");
-    const sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
-    window.focus();
-  }
-
-  function step(backwards) {
-    const q = elFind.value;
-    if (!q) {
-      elBar.classList.remove("nomatch");
-      return;
-    }
-    const found = window.find(q, false, backwards, true, false, false, false);
-    elBar.classList.toggle("nomatch", !found);
-  }
-
-  elFind.addEventListener("input", () => step(false));
-  elFind.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      step(e.shiftKey);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      closeFind();
-    }
-  });
-  document.getElementById("findnext").addEventListener("click", () => step(false));
-  document.getElementById("findprev").addEventListener("click", () => step(true));
-  document.getElementById("findclose").addEventListener("click", closeFind);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !elBar.hidden) closeFind();
-  });
-
-  elEmpty.addEventListener("click", () => post({ action: "openPanel" }));
 
   // --- focus, so the app knows when a keystroke is ours ----------------------
 
@@ -770,10 +613,10 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   window.mdview = {
     render,
-    openFind,
+    openFind: find.open,
     /** Escape from the chrome. A no-op unless the find bar is actually open. */
     dismissFind() {
-      if (!elBar.hidden) closeFind();
+      find.close();
     },
     /** The contents panel in the chrome asks for a jump by index. */
     scrollToHeading(index) {
@@ -794,7 +637,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // can observe: keyboard motion jumps rather than animates. See ./motion.js.
     _internals: {
       splitFrontmatter,
-      parseFields,
       countWords,
       keyboardScrollBehavior: KEYBOARD_SCROLL_BEHAVIOR,
     },
