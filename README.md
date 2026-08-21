@@ -269,8 +269,10 @@ Three things worth knowing if you change it:
 ./tools/run-tests.sh
 ```
 
-Under 40 seconds, and about 25 when nothing has changed. Four things keep it
-there, and all of them are easy to undo by accident:
+About 18 seconds when nothing has changed, and low 30s after editing Swift or
+the page (both make `build.sh` rebuild the app, which is now the largest single
+cost in the run). Six things keep it there, and all of them are easy to undo by
+accident:
 
 - **The harnesses build with `-Onone -wmo`, all at once.** Each one is the same
   ~16 source files plus its own `main.swift`, so building them one at a time with
@@ -282,6 +284,18 @@ there, and all of them are easy to undo by accident:
 - **Nothing is rebuilt that is already newer than its inputs** — neither a
   harness nor the app. Get that input list wrong and tests run against a stale
   build, which is loud; it cannot make them flake.
+- **The renders run at once, and so do the theme probes.** Seven render
+  processes and three app launches, all independent — nothing shared, not even a
+  preferences domain. No wait got shorter: the waiting overlaps. That it holds
+  under load is checked rather than assumed — 14 consecutive suite runs, four of
+  them with eight cores busy competing, no failures and no change in duration.
+  The suite is dominated by fixed waits, not CPU, which is why this was safe.
+- **`check-theme.sh` passes the theme on the command line**, which
+  NSUserDefaults reads as its argument domain and prefers over the stored value.
+  It used to `defaults write com.minh.mdview theme` and restore the old value
+  from a trap, so running the tests edited your own setting — and left it on the
+  last theme tried if the script was killed in between. Nothing is written now,
+  which is both safer and what lets the three runs overlap.
 - **One render runs the theme-independent checks, not all six.** The frontmatter
   parser, the word count, page focus, the heading clamp and the selection gutter
   reach the same verdict whichever palette is loaded, and running them per theme

@@ -130,14 +130,28 @@ for path in sys.argv[1:]:
         problems = []
         # One report as the page loads, so a reload (⌥⌘R sends no message of its
         # own) re-syncs the app instead of inheriting a stale flag.
+        # Each step is judged by the *first* report it produced, not by being the
+        # only one. The page also answers a real window focus event with whatever
+        # is true at the time, and the harness's own window handling — the resize
+        # before a snapshot, bringing the window forward — makes AppKit deliver
+        # one of those often enough to land mid-check. That extra report is the
+        # page behaving correctly, and requiring an exact sequence failed it as
+        # if the app were broken: an intermittent
+        # `afterBlur = [False, True, False, True]`. The bug actually being
+        # guarded against is a step reporting *nothing*, so that is what to
+        # assert.
+        def first_new(before, after):
+            extra = after[len(before):]
+            return extra[0] if extra else None
+
         if focus["startup"] != [False]:
             problems.append(f"no single false report at startup ({focus['startup']})")
         # Focusing the find bar has to say so, or plain keys would type into it.
-        if focus["afterOpenFind"][len(focus["startup"]):] != [True]:
+        if first_new(focus["startup"], focus["afterOpenFind"]) is not True:
             problems.append(f"opening the find bar did not report focus ({focus['afterOpenFind']})")
         # And the window losing focus has to stand the flag down, which is the
         # half focusin/focusout alone never covered.
-        if focus["afterBlur"][len(focus["afterOpenFind"]):] != [False]:
+        if first_new(focus["afterOpenFind"], focus["afterBlur"]) is not False:
             problems.append(f"a window blur did not report focus false ({focus['afterBlur']})")
         for problem in problems:
             print(f"  FAIL {path}: page focus — {problem}")

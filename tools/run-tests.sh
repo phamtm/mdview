@@ -135,25 +135,48 @@ echo "==> renderer"
 # same answer. MDVIEW_BATTERY=theme runs the palette probe alone.
 # check-render.py fails if this ends up on *every* render, so the coverage
 # cannot be dropped by accident.
-./build/snapshot Resources sample.md build/shot light >build/diag-light.txt
-MDVIEW_BATTERY=theme \
-  ./build/snapshot Resources sample.md build/shot dark  >build/diag-dark.txt
-MDVIEW_BATTERY=theme MDVIEW_THEME=night \
-  ./build/snapshot Resources sample.md build/shot-night dark >build/diag-night.txt
-MDVIEW_BATTERY=theme MDVIEW_THEME=vellum \
-  ./build/snapshot Resources sample.md build/shot-vellum light >build/diag-vellum.txt
+#
+# The renders are separate processes, each writing its own diagnostics file and
+# sharing no state — not even a preferences domain, since this harness writes no
+# defaults at all — so they run at once. Nothing about the waiting changed: every
+# fixed wait inside a render is the same length it was, they just overlap. The
+# hover and frontmatter-off runs join in, and their checks follow further down.
+renders=()
+start_render() {
+  local diag="$1"
+  shift
+  "$@" >"$diag" &
+  renders+=("$!:$diag")
+}
+start_render build/diag-light.txt \
+  ./build/snapshot Resources sample.md build/shot light
+start_render build/diag-dark.txt env MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources sample.md build/shot dark
+start_render build/diag-night.txt env MDVIEW_BATTERY=theme MDVIEW_THEME=night \
+  ./build/snapshot Resources sample.md build/shot-night dark
+start_render build/diag-vellum.txt env MDVIEW_BATTERY=theme MDVIEW_THEME=vellum \
+  ./build/snapshot Resources sample.md build/shot-vellum light
 # The harness sets the webview's appearance from its own light|dark argument,
 # independent of MDVIEW_THEME, so the four runs above all have the theme and the
 # appearance agreeing. This one makes them disagree — the System theme on a dark
 # Mac — which is the case that hid the alert-colour bug.
-MDVIEW_BATTERY=theme MDVIEW_THEME=system \
-  ./build/snapshot Resources sample.md build/shot-system dark >build/diag-system.txt
+start_render build/diag-system.txt env MDVIEW_BATTERY=theme MDVIEW_THEME=system \
+  ./build/snapshot Resources sample.md build/shot-system dark
+# The rail hover and the frontmatter-off render, checked after check-render.py.
+start_render build/diag-hover.txt \
+  env MDVIEW_BATTERY=theme MDVIEW_RAIL=hover MDVIEW_THEME=paper \
+  ./build/snapshot Resources sample.md build/shot-hover light
+start_render build/diag-nofm.txt env MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources sample.md build/nofm light nofm
+
+for entry in "${renders[@]}"; do
+  wait "${entry%%:*}" || { echo "  FAIL ${entry#*:}: the render exited non-zero"; exit 1; }
+done
+
 python3 tools/check-render.py build/diag-light.txt build/diag-dark.txt \
   build/diag-night.txt build/diag-vellum.txt build/diag-system.txt
 
 echo "==> contents rail preview sits beside its tick"
-MDVIEW_BATTERY=theme MDVIEW_RAIL=hover MDVIEW_THEME=paper \
-  ./build/snapshot Resources sample.md build/shot-hover light >build/diag-hover.txt
 python3 - <<'CHECK'
 import json
 raw = open("build/diag-hover.txt").read()
@@ -171,8 +194,6 @@ print(f"  ok   preview centred on its tick ({card} vs {tick})")
 CHECK
 
 echo "==> frontmatter hidden (View > Show Frontmatter off)"
-MDVIEW_BATTERY=theme \
-  ./build/snapshot Resources sample.md build/nofm light nofm >build/diag-nofm.txt
 python3 - <<'CHECK'
 import json
 raw = open("build/diag-nofm.txt").read()
