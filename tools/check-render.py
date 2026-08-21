@@ -304,7 +304,7 @@ for path in sys.argv[1:]:
             print(f"  ok   {path}: the whole query typed into the find bar, focus kept, "
                   f"3 matches highlighted, ⏎/⇧⏎ step and scroll, a miss says so, "
                   f"esc closes")
-    else:
+    elif full:
         print(f"  FAIL {path}: no find bar typing results")
         failed = True
     # Matching runs over a flat index of #doc's text, not one text node at a
@@ -353,7 +353,7 @@ for path in sys.argv[1:]:
             print(f"  ok   {path}: {markup['acrossQuery']!r} found across inline markup "
                   f"({across['currentStartTag']} → {across['currentEndTag']}, painted), "
                   f"{markup['joinQuery']!r} not found across a block boundary")
-    else:
+    elif full:
         print(f"  FAIL {path}: no find-across-markup results")
         failed = True
     # Selecting across blocks used to paint the tint as full-window bands, 208px
@@ -537,8 +537,8 @@ else:
 # checked none of them.
 if not full_battery:
     print("  FAIL no render ran the full battery — the frontmatter parser, the word count, "
-          "page focus, the heading clamp and the selection gutter were all skipped. "
-          "See MDVIEW_BATTERY in tools/run-tests.sh")
+          "page focus, the heading clamp, the find bar and the selection gutter were all "
+          "skipped. See MDVIEW_BATTERY in tools/run-tests.sh")
     failed = True
 elif len(full_battery) > 1:
     # Not wrong, just slow: each extra one is ~3.5s for an answer already known.
