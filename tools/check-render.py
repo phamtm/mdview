@@ -188,6 +188,106 @@ for path in sys.argv[1:]:
     else:
         print(f"  FAIL {path}: no heading step results")
         failed = True
+    # A whole query typed into the find bar, one real key event at a time.
+    #
+    # Only one character used to arrive. A match was shown by moving the document
+    # selection (window.find), a page has one selection, and WebKit types into
+    # that rather than into document.activeElement — so the field kept "focus"
+    # while the insertion point sat in the document, and every character after
+    # the first fell through to a web view with nothing editable in it and beeped.
+    # Setting .value from script cannot see any of this, which is why the harness
+    # synthesises key events; matches are custom highlights now, and the two
+    # things asserted together are that the query arrives *and* that it is found.
+    if "FINDTYPING " in raw:
+        typing = json.loads(raw.split("FINDTYPING ", 1)[1].splitlines()[0])
+        problems = []
+        if "error" in typing:
+            problems.append(typing["error"])
+        else:
+            query = typing["query"]
+            typed = typing["afterTyping"]
+            if not typing["firstResponder"]:
+                problems.append("the web view never became first responder, so no key "
+                                "event could reach the page")
+            if typed["query"] != query:
+                problems.append(f"the field holds {typed['query']!r} after {query!r} was "
+                                "typed — characters stopped arriving, which is what a match "
+                                "that is the real selection does to the insertion point")
+            if typed["activeElement"] != "findinput":
+                problems.append(f"focus left the field (activeElement is "
+                                f"{typed['activeElement']!r})")
+            # The app stands its plain keys down while the page says an input has
+            # focus. If that stops being reported, h, g and l in "highlight" do
+            # not just fail to type — they toggle panels and jump to the top.
+            if not typing["focusAfterTyping"]:
+                problems.append("the page stopped reporting input focus while the field had "
+                                "it — the app's plain keys would eat the next letter")
+            bad = [d for d in typing["dispositions"] if d != "passThrough"]
+            if bad or len(typing["dispositions"]) != len(query):
+                problems.append(f"the app did not leave every character to the field "
+                                f"({typing['dispositions']})")
+            # Keeping focus while finding nothing is the other way to pass, so the
+            # match has to be marked, and marked as the text that was typed.
+            if not typed["canPaint"]:
+                problems.append("no CSS Custom Highlight API in this WebKit, so matches are "
+                                "not painted at all")
+            if typed["matches"] != 3:
+                problems.append(f"{typed['matches']} matches for {query!r}, want 3")
+            if typed["currentText"].lower() != query:
+                problems.append(f"the current match reads {typed['currentText']!r}, "
+                                f"not {query!r}")
+            if typed["paintedCurrent"] != 1 or typed["paintedAll"] != typed["matches"] - 1:
+                problems.append(f"matches are not painted as one current plus the rest "
+                                f"({typed['paintedCurrent']} current, {typed['paintedAll']} "
+                                "others)")
+            if typed["nomatch"]:
+                problems.append(f"the bar says no match while holding {typed['matches']}")
+            # Enter steps forward, ⇧Enter back, and the third match is below the
+            # fold, so reaching it has to scroll.
+            nxt = typing["afterNext"]
+            twice = typing["afterNextTwice"]
+            back = typing["afterPrevious"]
+            steps = (typed["current"], nxt["current"], twice["current"], back["current"])
+            if steps != (0, 1, 2, 1):
+                problems.append(f"stepping went {steps} — want (0, 1, 2, 1)")
+            if twice["scrollY"] <= nxt["scrollY"]:
+                problems.append(f"the third match never scrolled into view (y="
+                                f"{twice['scrollY']} after y={nxt['scrollY']})")
+            if back["scrollY"] >= twice["scrollY"]:
+                problems.append("⇧Enter did not scroll back to the earlier match")
+            # One more character, which nothing matches. Two things at once: the
+            # bar's nomatch state, and that the field is still taking characters
+            # after four searches have run.
+            miss = typing["afterMiss"]
+            if miss["query"] != query + "z":
+                problems.append(f"the field holds {miss['query']!r} after a tenth "
+                                f"character — it stopped taking them")
+            if miss["matches"] or not miss["nomatch"]:
+                problems.append(f"a query nothing matches did not set nomatch "
+                                f"({miss['matches']} matches, nomatch={miss['nomatch']})")
+            if miss["paintedAll"] or miss["paintedCurrent"]:
+                problems.append("a query nothing matches left matches painted")
+            # Esc closes the bar, drops the highlights, and hands the keyboard
+            # back — that last part is what re-enables every plain key.
+            closed = typing["afterEscape"]
+            if closed["open"] or closed["activeElement"] == "findinput":
+                problems.append(f"Esc left the bar open={closed['open']} with focus on "
+                                f"{closed['activeElement']!r}")
+            if closed["paintedAll"] or closed["paintedCurrent"]:
+                problems.append("Esc left matches painted")
+            if typing["focusAfterEscape"]:
+                problems.append("Esc did not report focus false, so the plain keys stay dead")
+        for problem in problems:
+            print(f"  FAIL {path}: find bar typing — {problem}")
+        if problems:
+            failed = True
+        else:
+            print(f"  ok   {path}: the whole query typed into the find bar, focus kept, "
+                  f"3 matches highlighted, ⏎/⇧⏎ step and scroll, a miss says so, "
+                  f"esc closes")
+    else:
+        print(f"  FAIL {path}: no find bar typing results")
+        failed = True
     # Selecting across blocks used to paint the tint as full-window bands, 208px
     # past the column on the left and 177px on the right. Nothing else in this
     # file can see it: WebKit fills the gaps between a selection root's children

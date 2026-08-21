@@ -897,6 +897,20 @@ body {
   color: var(--accent-text);
 }
 
+/* Matches are painted here, not selected: the page has one selection and WebKit
+   types into it, so a selected match takes the keyboard out of the field above.
+   web/src/find.js builds the ranges; these two rules are all that makes them
+   visible. Weaker than ::selection's 30% for the others, stronger for the
+   current one, so a document full of matches still says which one you are on.
+   Both take the theme's own accent, so all three themes come out right. */
+::highlight(mdview-find) {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+::highlight(mdview-find-current) {
+  background-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  color: var(--strong);
+}
+
 /* --- print --------------------------------------------------------------- */
 
 @media print {
@@ -916,6 +930,11 @@ body {
   .copy,
   .rail-zone {
     display: none !important;
+  }
+  /* The bar is gone, so its match tints have nothing left to explain them. */
+  ::highlight(mdview-find),
+  ::highlight(mdview-find-current) {
+    background-color: transparent;
   }
   .prose {
     max-width: none;

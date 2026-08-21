@@ -141,8 +141,8 @@ Implementation notes that are easy to trip over:
   covering the centring margins and the column's own padding. A flex container
   has no block gaps to fill, so the tint hugs the line boxes instead. Nothing
   about layout changes: the same 39 `#doc` child rects, the same copied string,
-  the same `window.find` behaviour — which is why the rule reads as cruft and
-  invites deletion. Moving it to `.prose` does not work: that stops margins
+  the same find matches — which is why the rule reads as cruft and invites
+  deletion. Moving it to `.prose` does not work: that stops margins
   collapsing between blocks and the column reflows. It is screen-only, with
   `body { display: block }` inside `@media print`: nothing selects on paper, and
   WebKit is said to fragment flex containers badly across pages — untested here,
@@ -162,6 +162,30 @@ Implementation notes that are easy to trip over:
   What actually moves during a slide is the column's left edge — the measure is
   capped, so a wider window only re-centres the text — and that is
   `margin: 0 auto`, not this rule.
+- **The page has one selection, and WebKit types into it — so a find match is
+  not the selection.** `window.find()` was how a match was made visible without
+  any highlighting of our own, and it cost the find bar every character after the
+  first. The search moves the selection into the document; WebKit routes a typed
+  character at the selection, not at `document.activeElement`; so the field went
+  on reporting focus with its insertion point gone. The app then did the right
+  thing with the next key — an input in the page has focus, so plain keys stand
+  down and the keystroke is passed on — and it fell through a web view with
+  nothing editable in it, which is the beep. Measured, not guessed: after one
+  character `activeElement` is still `#findinput`, the selection sits in the
+  matched heading, and the field never takes another letter.
+  Refocusing the field after the search is the obvious fix and the wrong one:
+  the selection comes back to the field and the match stops being visible —
+  typing for an invisible search. So matches are `Range`s in `CSS.highlights`,
+  painted by `::highlight(mdview-find)` and `::highlight(mdview-find-current)`
+  in `Resources/style.css`, and the selection is never touched. Two consequences
+  worth knowing: matching walks one text node at a time, so a match split by
+  inline markup — the "down" of a bolded `mark**down**` — is not found, which
+  `window.find` would have caught; and the Custom Highlight API needs macOS
+  14.2, one minor version above the app's 14.0 deployment target, so below that
+  find still steps and scrolls but paints nothing. `tools/snapshot.swift` types a
+  whole query in as real key events, because script setting `.value` would be
+  doing the typing WebKit refused to do, and `tools/check-render.py` asserts the
+  field ends up holding all of it, still focused, with the match highlighted.
 - **A rule written for `[data-theme="night"]` needs a `:root:not([data-theme])`
   twin inside the `prefers-color-scheme: dark` block.** Colophon and the System
   theme on a dark Mac are two different selectors reaching the same palette, so a

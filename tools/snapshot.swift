@@ -396,7 +396,198 @@ final class Runner: NSObject, WKNavigationDelegate {
         measureClamp(Runner.tailMarkdown, name: "clamp-tail.md") { tail in
             self.measureClamp(Runner.oneHeadingMarkdown, name: "clamp-one.md") { one in
                 print("STEPCLAMP {\"tail\":\(tail),\"oneHeading\":\(one)}")
-                self.checkSelectionGutter()
+                self.checkFindTyping()
+            }
+        }
+    }
+
+    // MARK: - Typing a whole query into the find bar
+
+    /// Three matches for one word: two in view, and a third far below the fold
+    /// so that stepping to it has to scroll.
+    static let findMarkdown: String = {
+        let filler = (0..<40).map { "Filler paragraph \($0), with nothing to find in it." }
+            .joined(separator: "\n\n")
+        return """
+            # Find
+
+            The find bar paints a highlight over every match it can see.
+
+            Highlight the current one differently and the two can be told apart.
+
+            \(filler)
+
+            A third highlight, far enough down that stepping to it has to scroll.
+            """
+    }()
+
+    /// Typed one character at a time, and chosen for its letters: `h`, `g` and
+    /// `l` are all bound to plain reading keys, so a run where the app stops
+    /// standing them down does not just lose characters — it toggles panels.
+    static let findQuery = "highlight"
+
+    private static let findKeyCodes: [Character: UInt16] = [
+        "h": 4, "i": 34, "g": 5, "l": 37, "t": 17,
+    ]
+
+    /// Typing a multi-character query into the find bar, with real key events.
+    ///
+    /// The bug this exists for: a match used to be shown by moving the document
+    /// selection (`window.find`). A page has one selection and WebKit types into
+    /// *it*, not into `document.activeElement` — so the first character searched,
+    /// the insertion point left the field with the selection, and every character
+    /// after it went nowhere. The field still reported focus, so the app rightly
+    /// kept its plain keys stood down and passed the keystroke on, and it fell
+    /// through a web view with nothing editable in it, which is the beep.
+    ///
+    /// None of that is reachable by setting `.value` and firing an `input` event:
+    /// script would be doing the typing WebKit refused to do. The characters have
+    /// to arrive as key events, which is also why this lives here and not in a
+    /// page-side test file.
+    func checkFindTyping() {
+        window.setContentSize(NSSize(width: 900, height: 700))
+        webView.frame = NSRect(x: 0, y: 0, width: 900, height: 700)
+        let dir = mdURL.deletingLastPathComponent()
+        let payload = RenderPayload(
+            markdown: Runner.findMarkdown,
+            path: dir.appendingPathComponent("find.md").path, dir: dir.path,
+            error: "", showFrontmatter: showFrontmatter,
+            theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
+        guard let call = payload.renderCall else {
+            print("FINDTYPING {\"error\":\"payload encode failed\"}")
+            checkSelectionGutter()
+            return
+        }
+        webView.evaluateJavaScript(call + " 'ok'") { _, error in
+            if let error { print("FINDTYPING render error: \(error)") }
+            // A key event only reaches the page if the web view is first
+            // responder. It can never reach it because the window is *key*: this
+            // harness runs with an activation policy of .prohibited, so no window
+            // of ours ever becomes key — which is why the disposition recorded
+            // below supplies `windowIsKey` rather than reading it.
+            let responder = self.window.makeFirstResponder(self.webView)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self.webView.evaluateJavaScript(
+                    "window.scrollTo({ top: 0, behavior: 'instant' });"
+                        + " window.mdview.openFind(); 'ok'"
+                ) { _, _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.typeFindQuery(
+                            Array(Runner.findQuery), at: 0, responder: responder,
+                            dispositions: [])
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends one key event to the window, and reports what the app's own table
+    /// would have done with it — with the focus flag the page actually posted.
+    private func sendKey(
+        _ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []
+    ) -> String {
+        guard
+            let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil,
+                characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: keyCode),
+            let stroke = ShortcutMonitor.stroke(for: event)
+        else { return "couldNotSynthesise" }
+        let disposition = Shortcuts.disposition(
+            key: stroke.key, modifiers: stroke.modifiers,
+            context: KeyContext(
+                windowIsKey: true, editingChromeText: false,
+                pageInputFocused: MessageRecorder.shared.focusReports.last ?? false))
+        NSApp.sendEvent(event)
+        if let up = NSEvent.keyEvent(
+            with: .keyUp, location: .zero, modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            characters: characters, charactersIgnoringModifiers: characters,
+            isARepeat: false, keyCode: keyCode)
+        {
+            NSApp.sendEvent(up)
+        }
+        return "\(disposition)"
+    }
+
+    /// The find bar's own account of itself: the matches, which one is current,
+    /// and how many ranges are painted. A custom highlight is in neither
+    /// computed style nor the selection, so nothing else can see it.
+    private func findState(_ then: @escaping (String) -> Void) {
+        webView.evaluateJavaScript("JSON.stringify(window.mdview._internals.findState())") {
+            value, error in
+            if let error { print("FINDTYPING state error: \(error)") }
+            then((value as? String) ?? "{\"error\":\"no find state\"}")
+        }
+    }
+
+    private func typeFindQuery(
+        _ characters: [Character], at: Int, responder: Bool, dispositions: [String]
+    ) {
+        guard at < characters.count else {
+            let focused = MessageRecorder.shared.focusReports.last ?? false
+            findState { typed in
+                self.stepFindMatches(
+                    responder: responder, dispositions: dispositions, focused: focused,
+                    typed: typed)
+            }
+            return
+        }
+        let character = characters[at]
+        let disposition = sendKey(
+            String(character), keyCode: Runner.findKeyCodes[character] ?? 0)
+        // A pause between keystrokes, because that is how a query is typed: the
+        // bug needs the *previous* character's search to have run.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            self.typeFindQuery(
+                characters, at: at + 1, responder: responder,
+                dispositions: dispositions + [disposition])
+        }
+    }
+
+    /// Return, Return, ⇧Return, then Escape.
+    /// Sends one key, gives the page a moment, and reads the bar's state back.
+    private func sendAndRead(
+        _ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = [],
+        then: @escaping (String) -> Void
+    ) {
+        _ = sendKey(characters, keyCode: keyCode, flags: flags)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.findState(then) }
+    }
+
+    /// ⏎, ⏎, ⇧⏎ — then a character that makes the query miss, and Esc.
+    private func stepFindMatches(
+        responder: Bool, dispositions: [String], focused: Bool, typed: String
+    ) {
+        sendAndRead("\r", keyCode: 36) { next in
+            self.sendAndRead("\r", keyCode: 36) { twice in
+                self.sendAndRead("\r", keyCode: 36, flags: .shift) { back in
+                    // A tenth character, and one nothing matches: the bar has to
+                    // say so, and it still has to be *taking* characters by now.
+                    self.sendAndRead("z", keyCode: 6) { miss in
+                        self.sendAndRead("\u{1b}", keyCode: 53) { closed in
+                            let quoted = dispositions.map { "\"\($0)\"" }
+                                .joined(separator: ",")
+                            print(
+                                "FINDTYPING {\"query\":\"\(Runner.findQuery)\","
+                                    + "\"firstResponder\":\(responder),"
+                                    + "\"dispositions\":[\(quoted)],"
+                                    + "\"focusAfterTyping\":\(focused),"
+                                    + "\"focusAfterEscape\":"
+                                    + "\(MessageRecorder.shared.focusReports.last ?? true),"
+                                    + "\"afterTyping\":\(typed),"
+                                    + "\"afterNext\":\(next),"
+                                    + "\"afterNextTwice\":\(twice),"
+                                    + "\"afterPrevious\":\(back),"
+                                    + "\"afterMiss\":\(miss),"
+                                    + "\"afterEscape\":\(closed)}")
+                            self.checkSelectionGutter()
+                        }
+                    }
+                }
             }
         }
     }
@@ -436,7 +627,10 @@ final class Runner: NSObject, WKNavigationDelegate {
     ///     is the first thing to look at if the diff ever comes back empty. What
     ///     actually makes that failure loud rather than silent is
     ///     `insidePixels`, which check-render.py requires to be positive;
-    ///   * `window.find` replaces the selection, so nothing here may call it;
+    ///   * nothing here may move the document selection. The find bar used to,
+    ///     through `window.find`, and this check had to be kept away from it;
+    ///     it no longer does — matches are custom highlights now — but a probe
+    ///     that selects something of its own would still wipe this one out;
     ///   * `takeSnapshot` hands back stale frames — measured here as the
     ///     pre-selection image coming back twice in a row, in two runs out of
     ///     three — so each shot is repeated until the page settles, and the
@@ -527,8 +721,8 @@ final class Runner: NSObject, WKNavigationDelegate {
 
     /// Selects across four sibling blocks and reports the column's content box,
     /// measured live: the measure is a user setting, so the edges cannot be
-    /// hardcoded. Deliberately no `window.find` anywhere near this — it replaces
-    /// the selection, and the artefact vanishes with it.
+    /// hardcoded. Nothing near this may set a selection of its own: there is one
+    /// per page, and the artefact vanishes with it.
     private func selectAcrossBlocks(_ done: @escaping ([String: Any]) -> Void) {
         let script = """
             (function () {

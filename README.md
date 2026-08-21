@@ -52,7 +52,9 @@ npm run watch             # rebuild on save, then ⌥⌘R in the app
 
 | | |
 | --- | --- |
-| `web/src/viewer.js` | The renderer: markdown → DOM, post-processing, find bar |
+| `web/src/viewer.js` | The renderer: markdown → DOM, post-processing |
+| `web/src/find.js` | The find bar. Matches are custom highlights, never the selection |
+| `web/src/frontmatter.js` | The frontmatter split, the document's head, the word count |
 | `web/src/rail.js` | The tick rail beside the column, and it posts the outline to the app |
 | `web/src/motion.js` | One constant: keyboard scrolling jumps, mouse-driven jumps animate |
 | `web/src/mermaid.js` | Diagram entry point, built as its own file |
@@ -340,6 +342,12 @@ Thirteen checks, in the order they run:
   pixel assertion: the same page shot unselected and selected, with every changed
   pixel outside the column counted, since WebKit's selection gap filling reaches
   neither computed style nor geometry.
+  And one thing that has to come from *outside* the page: a whole query typed into
+  the find bar as real key events, one character at a time, after which the field
+  must still hold all of it, still have focus, and have a match highlighted. Only
+  the first character used to arrive — see the single-selection note in DESIGN.md —
+  and script setting `.value` cannot see that, because then script is doing the
+  typing WebKit refused to do.
   The app's navigation policy is *not* covered — the harness runs its own
   navigation delegate
 - **contents rail** — the hover preview appears, and sits beside the tick it

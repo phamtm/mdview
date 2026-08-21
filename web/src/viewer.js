@@ -542,6 +542,8 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // no need to wait for a frame, which never arrives when the window is
     // offscreen and rAF is throttled.
     rail.update(elDoc);
+    // The find bar's ranges point into the document that was just replaced.
+    find.refresh();
     drawDiagrams(token);
   }
 
@@ -639,6 +641,9 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       splitFrontmatter,
       countWords,
       keyboardScrollBehavior: KEYBOARD_SCROLL_BEHAVIOR,
+      // What the find bar has found. A custom highlight is in neither computed
+      // style nor the selection, so this is the only way to see it.
+      findState: () => find.state(),
     },
     /** Called by the app when the system appearance changes. */
     refreshDiagrams() {
