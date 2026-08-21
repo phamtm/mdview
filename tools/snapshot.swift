@@ -405,6 +405,17 @@ final class Runner: NSObject, WKNavigationDelegate {
 
     /// Three matches for one word: two in view, and a third far below the fold
     /// so that stepping to it has to scroll.
+    ///
+    /// Plus the two cases the flat text index exists to get right, searched
+    /// separately by `checkFindAcrossMarkup`:
+    ///
+    ///   * `mark**down**` renders as `mark<strong>down</strong>` — two text
+    ///     nodes, and "markdown" only matches if the search crosses them.
+    ///   * two adjacent blocks that would read as "there" if their text were
+    ///     simply concatenated. They are written as bare `<div>`s on purpose:
+    ///     marked puts a newline between every pair of blocks it emits, so a
+    ///     pair with real whitespace between them would pass whether the block
+    ///     separator is there or not, and the check would prove nothing.
     static let findMarkdown: String = {
         let filler = (0..<40).map { "Filler paragraph \($0), with nothing to find in it." }
             .joined(separator: "\n\n")
@@ -415,11 +426,22 @@ final class Runner: NSObject, WKNavigationDelegate {
 
             Highlight the current one differently and the two can be told apart.
 
+            Inline markup splits a phrase in two: mark**down** is one word in
+            two text nodes, and matching it has to cross them.
+
+            <div>Blocks do not join. This one ends with the</div><div>re begins \
+            the next, so a naive concatenation would find a word that is not on \
+            the page.</div>
+
             \(filler)
 
             A third highlight, far enough down that stepping to it has to scroll.
             """
     }()
+
+    /// The split phrase, and the word two blocks must not make between them.
+    static let findAcrossQuery = "markdown"
+    static let findJoinQuery = "there"
 
     /// Typed one character at a time, and chosen for its letters: `h`, `g` and
     /// `l` are all bound to plain reading keys, so a run where the app stops
@@ -584,11 +606,54 @@ final class Runner: NSObject, WKNavigationDelegate {
                                     + "\"afterPrevious\":\(back),"
                                     + "\"afterMiss\":\(miss),"
                                     + "\"afterEscape\":\(closed)}")
-                            self.checkSelectionGutter()
+                            self.checkFindAcrossMarkup()
                         }
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Matching across inline markup, but never across two blocks
+
+    /// The two things the flat text index exists for, on the document the typed
+    /// query above just used.
+    ///
+    /// Driven by setting the field's value from script rather than by key
+    /// events. What is under test is which ranges the search builds, and the
+    /// typed path — the one WebKit used to break — is covered above; doing it
+    /// again would cost nine more keystrokes to learn nothing.
+    private func checkFindAcrossMarkup() {
+        runFindQuery(Runner.findAcrossQuery) { across in
+            self.runFindQuery(Runner.findJoinQuery) { joined in
+                self.webView.evaluateJavaScript("window.mdview.dismissFind(); 'ok'") { _, _ in
+                    print(
+                        "FINDMARKUP {\"acrossQuery\":\"\(Runner.findAcrossQuery)\","
+                            + "\"joinQuery\":\"\(Runner.findJoinQuery)\","
+                            + "\"across\":\(across),\"joined\":\(joined)}")
+                    self.checkSelectionGutter()
+                }
+            }
+        }
+    }
+
+    /// Puts one query in the field, lets the bar search for it, and reads back
+    /// what it found. Scrolls to the top first, so `nearestToView` picks the
+    /// first match rather than whichever one the previous step left on screen.
+    private func runFindQuery(_ query: String, then: @escaping (String) -> Void) {
+        let script = """
+            (function () {
+              window.scrollTo({ top: 0, behavior: 'instant' });
+              const field = document.getElementById('findinput');
+              field.value = '\(query)';
+              window.mdview.openFind();
+              field.dispatchEvent(new Event('input'));
+              return 'ok';
+            })()
+            """
+        webView.evaluateJavaScript(script) { _, error in
+            if let error { print("FINDMARKUP script error: \(error)") }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.findState(then) }
         }
     }
 

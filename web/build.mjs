@@ -17,7 +17,7 @@ const watch = process.argv.includes("--watch");
 const shared = {
   bundle: true,
   format: "iife",
-  target: "safari17", // WKWebView on the macOS versions we support
+  target: "safari26", // the WKWebView that ships with the macOS floor in build.sh
   minify: !watch,
   sourcemap: watch ? "inline" : false,
   legalComments: "none",

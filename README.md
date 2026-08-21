@@ -22,7 +22,9 @@ To keep it around:
 cp -R build/MDView.app /Applications/
 ```
 
-Requires the Xcode Command Line Tools. Full Xcode is not needed.
+Requires macOS 26 or later and the Xcode Command Line Tools — full Xcode is not
+needed. The floor is `DEPLOY_TARGET` in `build.sh`, which sets both the
+compiler's target and `LSMinimumSystemVersion`.
 
 ### Signing, and the 7-day thing
 
@@ -348,6 +350,12 @@ Thirteen checks, in the order they run:
   the first character used to arrive — see the single-selection note in DESIGN.md —
   and script setting `.value` cannot see that, because then script is doing the
   typing WebKit refused to do.
+  Two more searches run on that same document, this time driven from script,
+  because what they are about is which ranges the search builds rather than how
+  the characters arrive: a phrase inline markup splits in two — the "down" of a
+  bolded `mark**down**` — must be found, with a range that starts in one text
+  node and ends in another, and two adjacent blocks whose text would spell a
+  word between them must *not* match it.
   The app's navigation policy is *not* covered — the harness runs its own
   navigation delegate
 - **contents rail** — the hover preview appears, and sits beside the tick it

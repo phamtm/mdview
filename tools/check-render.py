@@ -228,9 +228,6 @@ for path in sys.argv[1:]:
                                 f"({typing['dispositions']})")
             # Keeping focus while finding nothing is the other way to pass, so the
             # match has to be marked, and marked as the text that was typed.
-            if not typed["canPaint"]:
-                problems.append("no CSS Custom Highlight API in this WebKit, so matches are "
-                                "not painted at all")
             if typed["matches"] != 3:
                 problems.append(f"{typed['matches']} matches for {query!r}, want 3")
             if typed["currentText"].lower() != query:
@@ -287,6 +284,55 @@ for path in sys.argv[1:]:
                   f"esc closes")
     else:
         print(f"  FAIL {path}: no find bar typing results")
+        failed = True
+    # Matching runs over a flat index of #doc's text, not one text node at a
+    # time, so a phrase inline markup breaks up is still found: "markdown" in a
+    # bolded `mark**down**`. That is what window.find did and what walking node
+    # by node lost. The range then starts in one node and ends in another, which
+    # is asserted here because it is the whole mechanism — a match confined to
+    # one node would mean the index had not joined anything.
+    #
+    # The other half is that joining stops at a block. Two adjacent blocks whose
+    # text would spell "there" between them must not match: a newline goes in at
+    # every block boundary, and a text field cannot hold one.
+    if "FINDMARKUP " in raw:
+        markup = json.loads(raw.split("FINDMARKUP ", 1)[1].splitlines()[0])
+        problems = []
+        across, joined = markup["across"], markup["joined"]
+        want = markup["acrossQuery"]
+        if across["matches"] != 1:
+            problems.append(f"{across['matches']} matches for {want!r} split by inline "
+                            f"markup, want 1 — the search is not crossing text nodes")
+        elif across["currentText"].lower() != want:
+            problems.append(f"the match for {want!r} reads {across['currentText']!r}")
+        elif not across["currentSpansNodes"]:
+            problems.append(f"the match for {want!r} sits in a single text node, so it "
+                            f"cannot be the one split by markup")
+        elif (across["currentStartTag"], across["currentEndTag"]) != ("P", "STRONG"):
+            problems.append(f"the match runs {across['currentStartTag']} → "
+                            f"{across['currentEndTag']}, want P → STRONG")
+        if across["paintedCurrent"] != 1 or across["paintedAll"]:
+            problems.append(f"a match spanning two nodes is not painted as the current one "
+                            f"({across['paintedCurrent']} current, {across['paintedAll']} "
+                            "others)")
+        if across["nomatch"]:
+            problems.append(f"the bar says no match while holding {across['matches']}")
+        no = markup["joinQuery"]
+        if joined["matches"] or not joined["nomatch"]:
+            problems.append(f"{no!r} matched across a block boundary "
+                            f"({joined['matches']} matches) — the two blocks were joined")
+        if joined["paintedAll"] or joined["paintedCurrent"]:
+            problems.append(f"{no!r} left something painted")
+        for problem in problems:
+            print(f"  FAIL {path}: find across markup — {problem}")
+        if problems:
+            failed = True
+        else:
+            print(f"  ok   {path}: {markup['acrossQuery']!r} found across inline markup "
+                  f"({across['currentStartTag']} → {across['currentEndTag']}, painted), "
+                  f"{markup['joinQuery']!r} not found across a block boundary")
+    else:
+        print(f"  FAIL {path}: no find-across-markup results")
         failed = True
     # Selecting across blocks used to paint the tint as full-window bands, 208px
     # past the column on the left and 177px on the right. Nothing else in this

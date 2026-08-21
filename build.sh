@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 APP_NAME="MDView"
 BUNDLE_ID="com.minh.mdview"
 VERSION="1.0"
-DEPLOY_TARGET="14.0"
+DEPLOY_TARGET="26.0"
 ICON_VARIANT="ink"          # ink | paper | accent — see tools/make-icon.swift
 OUT="build/${APP_NAME}.app"
 SDK="$(xcrun --show-sdk-path --sdk macosx)"
