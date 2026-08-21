@@ -45,15 +45,28 @@ MainActor.assumeIsolated {
     check("htm is html", Viewer.isHTML(URL(fileURLWithPath: "/tmp/a.HTM")))
     check("md is not html", !Viewer.isHTML(URL(fileURLWithPath: "/tmp/a.md")))
     check("html is text-like", Viewer.isTextLike(URL(fileURLWithPath: "/tmp/a.html")))
-    check("html formats as html", Viewer.format(for: URL(fileURLWithPath: "/tmp/a.html")) == "html")
+    check("html formats as html", Viewer.format(for: URL(fileURLWithPath: "/tmp/a.html")) == .html)
     check(
         "md formats as markdown",
-        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.md")) == "markdown")
+        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.md")) == .markdown)
     // A .txt has always been treated as markdown, and still is.
     check(
         "txt formats as markdown",
-        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.txt")) == "markdown")
-    check("nothing open formats as markdown", Viewer.format(for: nil) == "markdown")
+        Viewer.format(for: URL(fileURLWithPath: "/tmp/a.txt")) == .markdown)
+    check("nothing open formats as markdown", Viewer.format(for: nil) == .markdown)
+    // The rawValue is what crosses to the page, so a renamed case would change
+    // the wire format without changing anything the compiler can see.
+    check("html goes over the wire as \"html\"", DocumentFormat.html.rawValue == "html")
+    check(
+        "markdown goes over the wire as \"markdown\"",
+        DocumentFormat.markdown.rawValue == "markdown")
+    // textExtensions is derived from the other two sets now. This is the
+    // invariant that used to be kept by hand: a file cannot count as markdown or
+    // html while being un-openable.
+    check(
+        "every markdown and html extension is openable",
+        Viewer.markdownExtensions.union(Viewer.htmlExtensions)
+            .isSubset(of: Viewer.textExtensions))
     check(
         "html source can be copied", Viewer.hasCopyableSource(URL(fileURLWithPath: "/tmp/a.html")))
     check("txt source is not copied", !Viewer.hasCopyableSource(URL(fileURLWithPath: "/tmp/a.txt")))

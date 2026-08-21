@@ -90,7 +90,7 @@ final class DocumentModel: ObservableObject {
         panel.canChooseDirectories = false
         panel.allowsOtherFileTypes = true
         panel.allowedContentTypes = DocumentModel.contentTypes
-        panel.message = "Choose a Markdown file"
+        panel.message = "Choose a Markdown, HTML or text file"
         if panel.runModal() == .OK, let picked = panel.url { open(picked) }
     }
 

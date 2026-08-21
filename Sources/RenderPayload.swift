@@ -11,9 +11,8 @@ struct RenderPayload {
     var path: String
     var dir: String
     var error: String
-    /// "markdown" or "html" — which parser the page should use. See
-    /// `Viewer.format(for:)`.
-    var format: String
+    /// Which parser the page should use. See `Viewer.format(for:)`.
+    var format: DocumentFormat
     var showFrontmatter: Bool
     var theme: String
     var size: String
@@ -26,7 +25,7 @@ struct RenderPayload {
             "path": path,
             "dir": dir,
             "error": error,
-            "format": format,
+            "format": format.rawValue,
             "showFrontmatter": showFrontmatter,
             "theme": theme,
             "size": size,

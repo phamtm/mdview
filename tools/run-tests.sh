@@ -162,9 +162,12 @@ start_render build/diag-hover.txt \
 start_render build/diag-nofm.txt env MDVIEW_BATTERY=theme \
   ./build/snapshot Resources sample.md build/nofm light nofm
 # An .html file, which the page must hand straight to the sanitiser instead of
-# through marked. Checked after check-render.py, below.
+# through marked, and one whose first line is `---` so the frontmatter split is
+# not silently applied to it. Both checked after check-render.py, below.
 start_render build/diag-html.txt env MDVIEW_BATTERY=theme \
   ./build/snapshot Resources tools/sample.html build/html light
+start_render build/diag-html-dashes.txt env MDVIEW_BATTERY=theme \
+  ./build/snapshot Resources tools/sample-dashes.html build/html-dashes light
 
 for entry in "${renders[@]}"; do
   wait "${entry%%:*}" || { echo "  FAIL ${entry#*:}: the render exited non-zero"; exit 1; }
@@ -209,39 +212,87 @@ CHECK
 echo "==> an html document renders as html, not as markdown"
 python3 - <<'CHECK'
 import json
-raw = open("build/diag-html.txt").read()
-data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
-posted = [l for l in raw.splitlines() if l.startswith("POSTED ")]
-fields = dict(p.split("=", 1) for p in posted[0].removeprefix("POSTED ").split(" ")) if posted else {}
-problems = []
 
-# The parser was skipped. tools/sample.html indents a paragraph by four spaces,
-# which markdown turns into a code block with the tags visible inside it — so a
-# code figure here is the parser having run.
-if data["codeFigures"]: problems.append(f"{data['codeFigures']} code figure(s) — the html went through marked")
-# And the structure came through as structure.
+def read(path):
+    raw = open(path).read()
+    data = json.loads(raw.split("DIAGNOSTICS ", 1)[1].splitlines()[0])
+    posted = [l for l in raw.splitlines() if l.startswith("POSTED ")]
+    fields = dict(p.split("=", 1) for p in posted[0].removeprefix("POSTED ").split(" ")) if posted else {}
+    return data, fields
+
+problems = []
+data, fields = read("build/diag-html.txt")
+
+# The page says which parser it used, so this is asserted rather than inferred.
+if data["appliedFormat"] != "html":
+    problems.append(f"page rendered it as {data['appliedFormat']!r}")
+# And two independent tripwires for the parser having run anyway, because the
+# flag above could be right while the branch is wrong. tools/sample.html indents
+# a paragraph four spaces, which markdown turns into a code block with the tags
+# showing; and it puts `~~this~~` in loose text between HTML blocks, which is
+# where markdown still does inline work.
+if data["codeFigures"]:
+    problems.append(f"{data['codeFigures']} code figure(s) — the indented paragraph went through marked")
+if data["strikethrough"]:
+    problems.append(f"{data['strikethrough']} strikethrough(s) — loose text went through marked")
+
+# The rest of the render still has to work.
 if data["tables"] != 1: problems.append(f"{data['tables']} tables, want 1")
-if data["headings"] < 3: problems.append(f"{data['headings']} h2s, want 3")
-if data["headingIds"] < 3: problems.append(f"{data['headingIds']} h2s carry an id, want 3")
-if data["railTicks"] < 3: problems.append(f"rail has {data['railTicks']} ticks, want at least 3")
-# Local paths are resolved against the file, as they are for markdown.
-if not data["imgLoaded"]: problems.append("the relative image did not load")
-# Sanitising is the half that does not change: both formats go through DOMPurify.
+if data["headings"] != 4: problems.append(f"{data['headings']} h2s, want 4")
+if data["headingIds"] != 4: problems.append(f"{data['headingIds']} h2s carry an id, want 4")
+if data["railTicks"] != 5: problems.append(f"rail has {data['railTicks']} ticks, want 5")
+# The first image in the document is the plain `src` one. The `srcset` one after
+# it is the case that used to break: the spec prefers srcset over src, so leaving
+# it unresolved pointed inside the app bundle and lost a picture that resolving
+# src alone had got right.
+if data["imgLoaded"] != 220: problems.append(f"first image is {data['imgLoaded']}px wide, want 220")
+# Two of the three images must paint: the `src` one and the `srcset` one. The
+# third points at a file that is not there on purpose, to fire the onerror the
+# sanitiser has to have stripped.
+if data["imagesPainted"] != 2:
+    problems.append(f"{data['imagesPainted']} of 2 images painted")
+# The srcset has to have been rewritten to an absolute path under the document's
+# own directory. Asserted on the attribute and not on whether the picture
+# appeared: `../sample-image.png` reaches the same file from the page's directory
+# as from the fixture's, so a load proves nothing here.
+srcset = data["srcsetAttr"]
+if not srcset.startswith("file://"):
+    problems.append(f"srcset is still relative ({srcset!r}) — it resolves against "
+                    "the page inside the app bundle, and the spec prefers it over src")
+elif "/Resources/" in srcset:
+    problems.append(f"srcset resolved into the app bundle ({srcset!r})")
+
+# Sanitising is the half that does not change between the two formats.
 if data["scriptTagsInDoc"]: problems.append(f"{data['scriptTagsInDoc']} script tag(s) survived")
 if data["onerrorAttrs"]: problems.append(f"{data['onerrorAttrs']} onerror attribute(s) survived")
 if data["pwned"]: problems.append("injected script ran")
-# The titlebar counts words of the text, not of the tags. Counting the source raw
-# makes a word of every `<p>`, so this must sit well under the whole-file count.
+
+# Pinned, not just "less than the file": the count comes off the rendered
+# document, so it has to break the source apart at a block edge (the tight
+# `<ul><li>alpha</li><li>bravo</li>` is three words, not one) and hold a phrase
+# together (`a<em>b</em>c` is one, not three). A bound alone passed both bugs.
 words, raw_words = int(fields.get("postedWords", -1)), int(fields.get("rawWords", -1))
-if words <= 0: problems.append(f"no word count posted ({words})")
-elif words >= raw_words: problems.append(f"word count {words} counts markup (whole file is {raw_words})")
+if (words, raw_words) != (104, 188):
+    problems.append(f"word count is {words} of {raw_words}, want 104 of 188")
+
+# A `---` first line is frontmatter in markdown and nothing at all in HTML.
+# Splitting one anyway ate the first heading and paragraph in silence.
+dashes, dash_fields = read("build/diag-html-dashes.txt")
+if dashes["appliedFormat"] != "html":
+    problems.append(f"dashes fixture rendered as {dashes['appliedFormat']!r}")
+if int(dash_fields.get("outlineHeadings", -1)) != 2:
+    problems.append(f"a --- first line cost the html file a heading "
+                    f"({dash_fields.get('outlineHeadings')} of 2 left)")
+if int(dash_fields.get("postedWords", -1)) != 15:
+    problems.append(f"dashes fixture counts {dash_fields.get('postedWords')} words, want 15")
 
 for p in problems: print(f"  FAIL {p}")
 if problems:
     print("HTML TESTS FAILED")
     raise SystemExit(1)
-print(f"  ok   parsed as html (no code figures, {data['tables']} table, {data['headings']} headings, "
-      f"image resolved), sanitised, {words} words of text not {raw_words} of source")
+print(f"  ok   parsed as html (no code figure, no strikethrough), {data['tables']} table, "
+      f"{data['headings']} headings, src and srcset both resolved, sanitised, "
+      f"{words} words of text not {raw_words} of source, and a --- first line costs it nothing")
 CHECK
 
 # The tools above aren't app bundles, so their UserDefaults writes land in a plist

@@ -123,11 +123,13 @@ Add as many as you like; they come back next launch.
 - `⌘O` opens a file; drag a file onto the window; or `open -a MDView notes.md`
 - Markdown (`.md .markdown .mdown .mkd .mdx .markdn .rmd .qmd`), HTML (`.html
   .htm`) and plain text (`.txt .text`). An HTML file is shown as the page it
-  already is — the markdown parser is skipped for it, because running it would
-  turn an indented element into a code block and grow emphasis inside
-  `an_identifier`. Everything else about the view is the same: headings get a
-  contents panel and rail ticks, relative paths resolve against the file, and the
-  sanitiser runs either way. A `.txt` is still read as markdown, as it always was
+  already is — the markdown parser is skipped for it, because running it damages
+  what it is handed: HTML is indented, and four spaces of indent is a markdown
+  code block, so nested elements come out as `<pre><code>&lt;p&gt;…`. Everything
+  else about the view is the same: headings get a contents panel and rail ticks,
+  relative paths resolve against the file (`src`, `srcset` and `poster` alike),
+  and the sanitiser runs either way — skipping the parser does not skip that. A
+  `.txt` is still read as markdown, as it always was
 - Save the file in any editor and the view refreshes, keeping your scroll position
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
@@ -425,13 +427,18 @@ Thirteen checks, in the order they run:
 - **frontmatter hidden** — with the header switched off, nothing from the block
   reaches the document, the YAML doesn't leak into the body, and the body keeps
   its headings
-- **html renders as html** — `tools/sample.html` is written so that the markdown
-  parser would visibly damage it: a paragraph indented four spaces becomes a code
-  block with its tags showing. No code figure means the parser was skipped. The
-  rest of the render still has to work — one table, three headings with ids, rail
-  ticks, the relative image resolved — and the sanitiser still has to strip the
-  `<script>` and the `onerror`. Plus the word count, which for HTML counts the
-  text and not the tags: 81 words of prose out of a 142-word file
+- **html renders as html** — the page reports which parser it used, and that is
+  asserted rather than inferred. Two tripwires cover the flag being right while
+  the branch is wrong: `tools/sample.html` indents a paragraph four spaces, which
+  markdown turns into a code block with the tags showing, and puts `~~this~~` in
+  loose text between HTML blocks, which is where markdown still does inline work.
+  The rest of the render still has to work — one table, four headings with ids,
+  five rail ticks, and both a `src` and a `srcset` image resolved against the file
+  — and the sanitiser still has to strip the `<script>` and the `onerror`. The
+  word count is pinned, not just bounded: it comes off the rendered document, so
+  it has to break `<ul><li>alpha</li><li>bravo</li>` into words and keep
+  `a<em>b</em>c` as one. A second fixture opens with `---`, which is frontmatter
+  in markdown and nothing in HTML — splitting it anyway ate a heading in silence
 
 Two things make the window snapshot fiddly, both worked around:
 

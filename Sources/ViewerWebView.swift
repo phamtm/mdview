@@ -54,18 +54,32 @@ final class DroppableWebView: WKWebView {
     }
 }
 
-enum Viewer {
-    static let textExtensions: Set<String> = [
-        "md", "markdown", "mdown", "mkd", "mdx", "markdn", "txt", "text", "rmd", "qmd",
-        "html", "htm",
-    ]
+/// Which parser the page should use for a document's contents. A string here
+/// would let a typo fall back to markdown silently, which for an HTML file is
+/// exactly the bug this exists to prevent.
+enum DocumentFormat: String {
+    case markdown
+    case html
+}
 
-    /// Markdown proper, as opposed to the plain-text files we will also open.
+enum Viewer {
+    /// Markdown proper, as opposed to the HTML and plain-text files we also open.
     static let markdownExtensions: Set<String> = [
         "md", "markdown", "mdown", "mkd", "mdx", "markdn", "rmd", "qmd",
     ]
 
     static let htmlExtensions: Set<String> = ["html", "htm"]
+
+    /// Read as markdown — which is what they have always been read as — but with
+    /// no source of their own to hand back, since the file *is* what is on screen.
+    static let plainTextExtensions: Set<String> = ["txt", "text"]
+
+    /// Everything we will open, derived rather than written out again. Kept by
+    /// hand, adding an extension to one set above and forgetting this one would
+    /// make a file that counts as markdown but cannot be dropped on the window,
+    /// linked to, or shown in the sidebar.
+    static let textExtensions: Set<String> =
+        markdownExtensions.union(htmlExtensions).union(plainTextExtensions)
 
     static func isTextLike(_ url: URL) -> Bool {
         textExtensions.contains(url.pathExtension.lowercased())
@@ -81,20 +95,21 @@ enum Viewer {
         return htmlExtensions.contains(url.pathExtension.lowercased())
     }
 
-    /// How the page should treat the file's contents. An HTML file already *is*
-    /// the markup, so running it through the markdown parser damages it: an
-    /// indented element becomes a code block and `an_identifier` grows emphasis.
-    /// Everything that is neither — .txt included — stays markdown, which is what
-    /// it has always been treated as.
-    static func format(for url: URL?) -> String {
-        isHTML(url) ? "html" : "markdown"
+    /// An HTML file already *is* the markup, and markdown damages what it is
+    /// handed: HTML is indented, and four spaces of indent is a markdown code
+    /// block, so nested elements come out as `<pre><code>&lt;p&gt;…`. Text
+    /// between HTML blocks is parsed as markdown too, so a `~~a~~` there becomes
+    /// a strikethrough. Everything that is not HTML stays markdown, .txt included.
+    static func format(for url: URL?) -> DocumentFormat {
+        isHTML(url) ? .html : .markdown
     }
 
-    /// Copy Document hands back the file's own source, so it needs a file whose
-    /// source is the document. Plain text is deliberately left out, as it always
-    /// has been.
+    /// Copy Document hands back the file's own source, so it wants a file whose
+    /// source differs from what is rendered. Plain text does not, and has always
+    /// been left out.
     static func hasCopyableSource(_ url: URL?) -> Bool {
-        isMarkdown(url) || isHTML(url)
+        guard let url else { return false }
+        return isTextLike(url) && !plainTextExtensions.contains(url.pathExtension.lowercased())
     }
 }
 

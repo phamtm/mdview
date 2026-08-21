@@ -1,17 +1,17 @@
-<!-- A fixture for the HTML path. Every part of it is chosen because the markdown
-     parser would damage it, so a render that looks right here is evidence the
-     parser was skipped rather than evidence that HTML happens to survive it. -->
+<!-- A fixture for the HTML path. Every part is here because the markdown parser
+     would visibly damage it, so a render that comes out right is evidence the
+     parser was skipped — not evidence that HTML happens to survive it. -->
 <h1>An HTML document</h1>
 
 <p>Opened as HTML, not as markdown.</p>
 
     <p>This paragraph is indented four spaces. Markdown would make it a code
-    block, tags and all, so a code figure here means the parser ran.</p>
+    block with the tags showing, so a code figure here means the parser ran.</p>
 
-<h2>Emphasis is not invented</h2>
+<h2>Loose text is not markdown either</h2>
 
-<p>A name like some_identifier_here keeps its underscores; markdown would eat the
-middle and emphasise it. Same for a*b*c.</p>
+Text between HTML blocks is what markdown still processes, so ~~this~~ would
+come out struck through if the parser had a turn at it.
 
 <h2>Structure survives</h2>
 
@@ -20,11 +20,18 @@ middle and emphasise it. Same for a*b*c.</p>
   <tbody><tr><td>format</td><td>html</td></tr></tbody>
 </table>
 
-<p>A <a href="./sample.html">relative link</a> and an
-<img src="../sample-image.png" alt="image from a parent directory"> resolved
-against the file, the same as in a markdown document.</p>
+<!-- Written tight on purpose: nothing separates these, so a word count taken
+     from the source text would run them together into one word. -->
+<ul><li>alpha</li><li>bravo</li><li>charlie</li></ul>
+
+<h2>Paths resolve against the file</h2>
+
+<p>A <a href="./sample.html">relative link</a>, an
+<img src="../sample-image.png" alt="plain src"> and the same picture again
+through <img srcset="../sample-image.png 1x" alt="srcset only">, which the spec
+prefers over src and which markdown never emitted.</p>
 
 <h2>And it is still sanitised</h2>
 
-<script>window.pwned = true;</script>
-<img src="does-not-exist.png" onerror="window.pwned = true">
+<script>window.__pwned = true;</script>
+<img src="does-not-exist.png" onerror="window.__pwned = true">

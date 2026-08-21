@@ -140,34 +140,58 @@ final class Runner: NSObject, WKNavigationDelegate {
         guard let call = payload.renderCall else { print("payload encode failed"); return }
         webView.evaluateJavaScript(call + " 'ok'") { _, error in
             if let error { print("render error: \(error)") }
-            // mermaid is loaded lazily, so its diagrams appear some time after
-            // the render call returns. This used to be a flat 3s wait, which was
-            // 30x longer than it takes: ask the page instead, every 50ms.
-            self.waitForDiagrams(start: Date())
+            // The page settles asynchronously — diagrams draw and images load after
+            // the render call returns — so wait for it rather than sleeping through
+            // a guess at how long it might take.
+            self.waitForDocument(start: Date())
         }
     }
 
-    /// Polls until every ```mermaid fence in the document has drawn an svg, then
-    /// carries on. The deadline is the old flat wait: if the diagrams never
-    /// arrive we continue anyway and let the diagnostics report the shortfall,
-    /// rather than hanging.
-    func waitForDiagrams(start: Date) {
-        let wanted = markdown.components(separatedBy: "```mermaid").count - 1
-        guard wanted > 0 else {
-            driveRail()
-            return
-        }
-        webView.evaluateJavaScript("document.querySelectorAll('#doc .mermaid svg').length") {
-            value, _ in
-            let drawn = (value as? Int) ?? 0
-            if drawn >= wanted || Date().timeIntervalSince(start) > 3.0 {
+    /// Polls until the document has settled — every ```mermaid fence has drawn
+    /// its svg, and every image has either loaded or failed.
+    ///
+    /// This was a flat 3s wait for mermaid alone, which was both 30x longer than
+    /// mermaid needs and the wrong thing to wait for: the probe below reads image
+    /// widths, and nothing made those ready. sample.md got away with it only
+    /// because it has a diagram, so the mermaid wait covered the image by
+    /// accident; a document without one read `naturalWidth` of an image still in
+    /// flight about a quarter of the time.
+    ///
+    /// A broken image counts as settled — `complete` is true once it has failed —
+    /// so a deliberately missing src does not hold this up.
+    ///
+    /// The deadline is the old flat wait: if the page never settles we carry on
+    /// and let the diagnostics report the shortfall rather than hanging.
+    func waitForDocument(start: Date) {
+        let wantedDiagrams = markdown.components(separatedBy: "```mermaid").count - 1
+        let query = """
+            JSON.stringify({
+              svgs: document.querySelectorAll('#doc .mermaid svg').length,
+              loading: Array.from(document.querySelectorAll('#doc img'))
+                .filter(function (img) { return !img.complete; }).length
+            })
+            """
+        webView.evaluateJavaScript(query) { value, _ in
+            let state = (value as? String) ?? ""
+            let drawn = Self.number(in: state, key: "svgs")
+            let loading = Self.number(in: state, key: "loading")
+            let settled = drawn >= wantedDiagrams && loading == 0
+            if settled || Date().timeIntervalSince(start) > 3.0 {
                 self.driveRail()
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.waitForDiagrams(start: start)
+                    self.waitForDocument(start: start)
                 }
             }
         }
+    }
+
+    /// Reads one integer out of the flat JSON above. A full decode would want a
+    /// type per probe, and this is the only place that reads one.
+    private static func number(in json: String, key: String) -> Int {
+        guard let range = json.range(of: "\"\(key)\":") else { return -1 }
+        let digits = json[range.upperBound...].prefix { $0.isNumber }
+        return Int(digits) ?? -1
     }
 
     func diagnose() {
@@ -185,6 +209,19 @@ final class Runner: NSObject, WKNavigationDelegate {
               details: document.querySelectorAll('#doc details').length,
               imgSrc: (document.querySelector('#doc img') || {}).src || 'none',
               imgLoaded: (function(i){ return i ? i.naturalWidth : 0; })(document.querySelector('#doc img')),
+              // imgLoaded is the first image only. This is every one that
+              // actually painted, so a document with several can assert each of
+              // them arrived — a `srcset` left unresolved shows up here and
+              // nowhere else, since the first image may well have a plain `src`.
+              imagesPainted: Array.from(document.querySelectorAll('#doc img'))
+                .filter(function (i) { return i.naturalWidth > 0; }).length,
+              // The srcset as it stands in the document. Whether the picture
+              // *loaded* cannot prove this was rewritten — a relative path can
+              // resolve to the same file from the page's directory as from the
+              // document's, which is exactly what happened to the first attempt
+              // at this test. So the rewriting is asserted directly.
+              srcsetAttr: (function (i) { return i ? i.getAttribute('srcset') : 'none'; })(
+                document.querySelector('#doc img[srcset]')),
               mdLinkHref: (function(){
                 var a = Array.from(document.querySelectorAll('#doc a')).find(function(x){ return /README/.test(x.href); });
                 return a ? a.href : 'none';
@@ -251,7 +288,11 @@ final class Runner: NSObject, WKNavigationDelegate {
               // window is offscreen, so requestAnimationFrame never fires and
               // every scroll is instant whatever was asked for. See
               // web/src/motion.js.
-              keyboardScrollBehavior: window.mdview._internals.keyboardScrollBehavior
+              keyboardScrollBehavior: window.mdview._internals.keyboardScrollBehavior,
+              // Which parser the page actually used, so a test can assert the
+              // branch was taken instead of inferring it from the damage the
+              // wrong one would have done.
+              appliedFormat: window.mdview._internals.format()
             })
             """
         webView.evaluateJavaScript(probe) { value, error in
@@ -547,10 +588,11 @@ final class Runner: NSObject, WKNavigationDelegate {
         window.setContentSize(NSSize(width: 900, height: 700))
         webView.frame = NSRect(x: 0, y: 0, width: 900, height: 700)
         let dir = mdURL.deletingLastPathComponent()
+        let doc = dir.appendingPathComponent("find.md")
         let payload = RenderPayload(
             markdown: Runner.findMarkdown,
-            path: dir.appendingPathComponent("find.md").path, dir: dir.path,
-            error: "", format: "markdown", showFrontmatter: showFrontmatter,
+            path: doc.path, dir: dir.path,
+            error: "", format: Viewer.format(for: doc), showFrontmatter: showFrontmatter,
             theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             print("FINDTYPING {\"error\":\"payload encode failed\"}")
@@ -784,10 +826,11 @@ final class Runner: NSObject, WKNavigationDelegate {
         window.setContentSize(NSSize(width: 900, height: 700))
         webView.frame = NSRect(x: 0, y: 0, width: 900, height: 700)
         let dir = mdURL.deletingLastPathComponent()
+        let doc = dir.appendingPathComponent("selection.md")
         let payload = RenderPayload(
             markdown: Runner.selectionMarkdown,
-            path: dir.appendingPathComponent("selection.md").path, dir: dir.path,
-            error: "", format: "markdown", showFrontmatter: showFrontmatter,
+            path: doc.path, dir: dir.path,
+            error: "", format: Viewer.format(for: doc), showFrontmatter: showFrontmatter,
             theme: firstTheme, size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             print("SELECTION {\"error\":\"payload encode failed\"}")
@@ -999,9 +1042,11 @@ final class Runner: NSObject, WKNavigationDelegate {
         _ markdown: String, name: String, then: @escaping (String) -> Void
     ) {
         let dir = mdURL.deletingLastPathComponent()
+        let doc = dir.appendingPathComponent(name)
         let payload = RenderPayload(
-            markdown: markdown, path: dir.appendingPathComponent(name).path, dir: dir.path,
-            error: "", format: "markdown", showFrontmatter: showFrontmatter, theme: firstTheme,
+            markdown: markdown, path: doc.path, dir: dir.path,
+            error: "", format: Viewer.format(for: doc), showFrontmatter: showFrontmatter,
+            theme: firstTheme,
             size: "regular", alignment: alignment, measure: measure)
         guard let call = payload.renderCall else {
             then("{\"error\":\"payload encode failed\"}")
@@ -1085,14 +1130,15 @@ final class Runner: NSObject, WKNavigationDelegate {
     /// sample.md.
     func renderAgain() {
         let dir = mdURL.deletingLastPathComponent()
+        let secondDoc = dir.appendingPathComponent("second-render.md")
         let payload = RenderPayload(
             markdown: Runner.secondMarkdown,
             // A different path, so the page cannot treat this as a reload of the
             // file it already has and keep anything from it.
-            path: dir.appendingPathComponent("second-render.md").path,
+            path: secondDoc.path,
             dir: dir.path,
             error: "",
-            format: "markdown",
+            format: Viewer.format(for: secondDoc),
             showFrontmatter: showFrontmatter,
             theme: secondTheme,
             size: "regular",

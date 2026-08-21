@@ -26,6 +26,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   let current = { path: "", dir: "" };
   let renderToken = 0; // guards async mermaid work against a newer render
+  let appliedFormat = ""; // which parser the last render used, for the tests
   let diagramPass = 0; // unique ids per mermaid draw pass
   let diagrams = []; // {el, code} for the document on screen
 
@@ -37,21 +38,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   // --- helpers --------------------------------------------------------------
 
   const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  /**
-   * The text an HTML source would show, for counting words in it.
-   *
-   * A <template> is inert: assigning to its innerHTML parses the markup without
-   * running a script, loading an image, or putting anything on the page. Script
-   * and style bodies are dropped because their source is not prose — otherwise a
-   * page with a stylesheet in its head counts every selector as words.
-   */
-  function visibleText(html) {
-    const holder = document.createElement("template");
-    holder.innerHTML = html;
-    holder.content.querySelectorAll("script, style").forEach((n) => n.remove());
-    return holder.content.textContent || "";
-  }
 
   function escapeHtml(s) {
     return s.replace(
@@ -235,9 +221,38 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     });
   }
 
+  /**
+   * A `srcset` is a comma-separated list of `url [descriptor]`, and a URL in it
+   * may not contain a comma, so splitting on one is safe.
+   */
+  function resolveSrcset(value) {
+    return value
+      .split(",")
+      .map((candidate) => {
+        const parts = candidate.trim().split(/\s+/);
+        if (!parts[0]) return "";
+        parts[0] = resolveURL(parts[0]);
+        return parts.join(" ");
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
   function resolveLocalPaths(root) {
-    root.querySelectorAll("img[src]").forEach((img) => {
-      img.src = resolveURL(img.getAttribute("src"));
+    // Every attribute that survives the sanitiser carrying a URL, not just
+    // `img[src]`. `srcset` matters most and is the least obvious: the spec
+    // prefers it over `src`, so an <img> with both used to *lose* a picture that
+    // resolving `src` alone had got right — the unresolved candidate won and
+    // pointed inside the app bundle. Markdown never emitted one; an HTML file
+    // written by hand or exported by a tool routinely does.
+    root.querySelectorAll("[src]").forEach((el) => {
+      el.setAttribute("src", resolveURL(el.getAttribute("src")));
+    });
+    root.querySelectorAll("[srcset]").forEach((el) => {
+      el.setAttribute("srcset", resolveSrcset(el.getAttribute("srcset")));
+    });
+    root.querySelectorAll("[poster]").forEach((el) => {
+      el.setAttribute("poster", resolveURL(el.getAttribute("poster")));
     });
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href");
@@ -509,36 +524,56 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // Frontmatter is a markdown convention, so an HTML file has none — and
     // splitting one anyway would eat any file that happened to start with `---`.
     const isHtml = payload.format === "html";
+    // An unrecognised format renders as markdown, and for an HTML file that is
+    // the exact bug this field exists to prevent — so it must not be silent.
+    if (payload.format !== "html" && payload.format !== "markdown") {
+      console.error("mdview: unknown payload format " + JSON.stringify(payload.format));
+    }
+    appliedFormat = isHtml ? "html" : "markdown";
     const split = isHtml
       ? { body: payload.markdown || "", fields: [] }
       : splitFrontmatter(payload.markdown || "");
 
-    // The titlebar disclosure is drawn by Swift, but the parser lives here —
-    // duplicating it there would be two implementations to keep in step.
-    //
-    // Sent before anything is rendered, and it depends on nothing below: a throw
-    // in marked or DOMPurify would otherwise leave the titlebar with no count and
-    // no fields at all, which is a failure mode Swift-local counting never had.
-    post({
-      action: "frontmatter",
-      // The titlebar's word count, of the body only. Counting it here is the
-      // point of this message: Swift cannot exclude the frontmatter without a
-      // second parser. Separators are space and newline — a tab deliberately is
-      // not one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it.
-      // Markdown source is close enough to its own prose to count directly.
-      // HTML source is not: counting it raw makes words of the tags, so the
-      // titlebar would read a few hundred too many. Its text is counted instead.
-      words: countWords(isHtml ? visibleText(split.body) : split.body),
-      // Title and subtitle are already on the page as the document's own head.
-      fields: panelFields(split.fields),
-    });
+    // The titlebar's word count and the fields for its disclosure. The parser
+    // lives here rather than in Swift, which would be two implementations to
+    // keep in step. Separators are space and newline — a tab deliberately is not
+    // one, so `a\tb` stays one word, and tools/wordcount-tests.js pins it. Title
+    // and subtitle are left out, already being on the page as the document's own
+    // head.
+    const postCount = (words) =>
+      post({ action: "frontmatter", words, fields: panelFields(split.fields) });
 
-    // An HTML file already *is* the markup, so the markdown parser is skipped —
-    // it damages what it is handed: an indented element becomes a code block and
-    // `an_identifier` grows emphasis. The sanitiser is not what changes; both
-    // formats go through it, which is what strips <script> either way.
+    // Markdown source is its own prose, so it is counted before anything is
+    // parsed — which is why this message has always gone first: a throw in
+    // marked or DOMPurify still leaves the titlebar a count and its fields.
+    //
+    // HTML source is not prose. Counting it raw makes a word of every tag, and
+    // counting it cleverly is worse: which elements reach the screen is
+    // DOMPurify's decision to make, not one to reimplement here, and a word
+    // boundary is the difference between `<li>a</li><li>b</li>` — two words —
+    // and `a<em>b</em>c`, which is one. Both answers live in the rendered
+    // document and nowhere else, so an HTML count waits for one. Nothing is lost
+    // by waiting: an HTML file has no fields, and a render that throws leaves
+    // nothing to count anyway.
+    if (!isHtml) postCount(countWords(split.body));
+
+    // An HTML file already *is* the markup, so the markdown parser is skipped.
+    // What it damages is block-level: HTML is indented, and four spaces of
+    // indent is a markdown code block, so nested elements come out as
+    // `<pre><code>&lt;p&gt;…`. Text sitting between HTML blocks is parsed as
+    // markdown too, so a `~~a~~` there turns into a strikethrough.
+    //
+    // The sanitiser is not what changes. Both formats go through it, which is
+    // why skipping the parser cannot also skip the stripping of <script>.
     const dirty = isHtml ? split.body : marked.parse(split.body);
     elDoc.innerHTML = DOMPurify.sanitize(dirty, { ADD_ATTR: ["target"] });
+
+    // Here, and not further down: innerText is what a reader would select, so it
+    // breaks at a block edge and not inside a phrase — the distinction a
+    // source-level count cannot make. And it must be read before the decorations
+    // below, each of which adds text of its own: a copy button says "Copy", a
+    // heading grows an anchor.
+    if (isHtml) postCount(countWords(elDoc.innerText || elDoc.textContent || ""));
 
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
@@ -667,6 +702,10 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     _internals: {
       splitFrontmatter,
       countWords,
+      // Which parser the last render used. Asserting this is how a test knows
+      // the HTML branch was taken, rather than inferring it from the damage
+      // markdown would have done.
+      format: () => appliedFormat,
       keyboardScrollBehavior: KEYBOARD_SCROLL_BEHAVIOR,
       // What the find bar has found. A custom highlight is in neither computed
       // style nor the selection, so this is the only way to see it.

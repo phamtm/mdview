@@ -249,7 +249,7 @@ enum Shortcuts {
             title: "Reveal in Finder", group: .file, handledBy: .menu),
         Shortcut(
             key: .char("c"), modifiers: [.command, .option], action: .copyDocument,
-            title: "Copy the markdown source", group: .file, handledBy: .menu),
+            title: "Copy the document source", group: .file, handledBy: .menu),
         Shortcut(
             key: .char("p"), modifiers: .command, action: .printDocument,
             title: "Print", group: .file, handledBy: .menu),
