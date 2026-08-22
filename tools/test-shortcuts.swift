@@ -48,8 +48,8 @@ check(
 
 // MARK: The two combos we handle ourselves
 
-check("⌘[ → toggleSidebar", resolve(.char("["), .command) == .toggleSidebar)
-check("⌘] → toggleContents", resolve(.char("]"), .command) == .toggleContents)
+check("⌘[ → goBack", resolve(.char("["), .command) == .goBack)
+check("⌘] → goForward", resolve(.char("]"), .command) == .goForward)
 
 // MARK: Menu items keep their own key equivalents
 
@@ -65,7 +65,8 @@ let menuStrokes: [(String, Shortcut.Key, Shortcut.Modifiers)] = [
     ("⌥⌘R", .char("r"), [.command, .option]),
     ("⇧⌘R", .char("R"), .command),
     ("⌥⌘C", .char("c"), [.command, .option]),
-    ("⌘P", .char("p"), .command),
+    ("⌘P (Quick Open)", .char("p"), .command),
+    ("⇧⌘P (Print)", .char("P"), .command),
     ("⌘,", .char(","), .command),
     ("⌘=", .char("="), .command),
     ("⌘-", .char("-"), .command),
@@ -90,8 +91,8 @@ for (key, _) in plainKeys {
         "\(key.label) is the search field's while it is being typed in",
         resolve(key, [], searching) == nil)
 }
-check("⌘[ still works while searching", resolve(.char("["), .command, searching) == .toggleSidebar)
-check("⌘] still works while searching", resolve(.char("]"), .command, searching) == .toggleContents)
+check("⌘[ still works while searching", resolve(.char("["), .command, searching) == .goBack)
+check("⌘] still works while searching", resolve(.char("]"), .command, searching) == .goForward)
 
 // MARK: While an input in the page has focus
 
@@ -102,8 +103,8 @@ for (key, _) in plainKeys {
 // Not merely "does nothing": the page's own listener closes the find bar on
 // Escape, and it never sees the key if this consumes it.
 check("esc is not consumed when a page input has focus", resolve(.escape, [], finding) == nil)
-check("⌘[ still works from the find bar", resolve(.char("["), .command, finding) == .toggleSidebar)
-check("⌘] still works from the find bar", resolve(.char("]"), .command, finding) == .toggleContents)
+check("⌘[ still works from the find bar", resolve(.char("["), .command, finding) == .goBack)
+check("⌘] still works from the find bar", resolve(.char("]"), .command, finding) == .goForward)
 
 // MARK: While the help overlay is up
 
@@ -271,7 +272,7 @@ MainActor.assumeIsolated {
     // A combo keeps its modifiers through the re-casing.
     check(
         "caps lock on, ⌘] is still ⌘]",
-        action("]", [.capsLock, .command]) == .toggleContents)
+        action("]", [.capsLock, .command]) == .goForward)
 }
 
 // MARK: The table is a table

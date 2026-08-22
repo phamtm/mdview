@@ -115,8 +115,29 @@ Add as many as you like; they come back next launch.
   and disappear on their own — no refresh needed
 - Only markdown-ish files are listed. `View ▸ Show All Files in Sidebar` lifts that
 - Right-click for reveal in Finder, copy path, and remove folder
-- `h`, `⌘[` or `⌘B` hides and shows the sidebar; drag its right edge to resize
-  (the width sticks)
+- `h`, `⌘B` hides and shows the sidebar; drag its right edge to resize (the width sticks)
+
+### Reading
+
+A few things the app does so you don't have to think about where you were:
+
+- **Every file remembers where you stopped reading.** Switch away and back, quit
+  and reopen tomorrow — the document opens at your place. The last 64 positions
+  survive a relaunch; within a session every file is remembered.
+- **Live reloads don't move under you.** Saving from an editor re-renders, but
+  your viewport is anchored to the nearest heading above it plus how far into
+  that section you'd read — so editing paragraphs above the fold can't drag
+  your sentence around. Open `<details>` sections stay open too.
+- **Following a link between files keeps the way back.** `⌘[` goes back to the
+  document you came from, `⌘]` forward again.
+- **Quick Open** (`⌘P`) fuzzy-matches every file in the library — folders that
+  were never expanded included. An empty query lists your recents.
+
+### Motion
+
+The app respects `prefers-reduced-motion`: smooth scrolling, panel slides, theme
+cross-fades and the rest all collapse to instant when the system asks for it.
+Theme changes cross-fade over ~200ms otherwise; documents fade up as they open.
 
 ### Document
 
@@ -143,15 +164,16 @@ Add as many as you like; they come back next launch.
   different numbers, and the last still disagreed with the markdown count by 30%
   on the same prose. Both are absent rather than empty, so the titlebar and the
   panel show nothing instead of the last document's
-- Save the file in any editor and the view refreshes, keeping your scroll position
+- Save the file in any editor and the view refreshes, keeping your reading position (see Reading above)
 - Links to other local `.md` files open in the app; web links go to your browser;
   `#heading` links and footnotes scroll in place
-- Relative image paths resolve against the file's own folder
+- Relative image paths resolve against the file's own folder. Images below the
+  fold load lazily and fade in as they arrive
 - Ticks down the left of the column show where you are; hover one to see its
   heading, click to jump there
-- `l`, `⌘]` or `⌥⌘O` opens a contents panel on the right listing the headings —
-  `#`, `##` and `###`; deeper ones are left out. Drag its left edge to resize —
-  like the sidebar, the width sticks, and neither panel is allowed to squeeze the
+- `l`, `⌥⌘O` opens a contents panel on the right listing the headings — `#`,
+  `##` and `###`; deeper ones are left out. Drag its left edge to resize — like
+  the sidebar, the width sticks, and neither panel is allowed to squeeze the
   document below its minimum width
 
 To make `.md` (or `.html`) files open here by default: select one in Finder,
@@ -164,11 +186,13 @@ To make `.md` (or `.html`) files open here by default: select one in Finder,
 | `j` / `k` | Half a page down / up |
 | `g` / `G` | Top / end of the document |
 | `n` / `N` | Next / previous heading |
+| `⌘[` / `⌘]` | Back to the previous document / forward again |
 | `/` or `⌘F` | Find in document |
 | `?` | Every shortcut there is, in a panel |
 | `Esc` | Close that panel, or the find bar |
-| `h`, `⌘[` or `⌘B` | Toggle sidebar |
-| `l`, `⌘]` or `⌥⌘O` | Toggle the contents panel |
+| `h`, `⌘B` | Toggle sidebar |
+| `l`, `⌥⌘O` | Toggle the contents panel |
+| `⌘P` | Quick Open — type a few letters, land on the file |
 | `⌘O` | Open file |
 | `⇧⌘O` | Add folder to sidebar |
 | `⌘,` | Settings: theme, type size, alignment, column width |
@@ -181,7 +205,7 @@ To make `.md` (or `.html`) files open here by default: select one in Finder,
 | `View ▸ Show Frontmatter` | Show or hide the metadata header |
 | `File ▸ Copy File Path` | Path of the open file |
 | `⇧⌘R` | Reveal in Finder |
-| `⌘P` | Print |
+| `⇧⌘P` | Print |
 
 The plain keys work while you are reading and stand down while you are typing —
 in the sidebar's search box or the find bar, they are just letters. A key nothing

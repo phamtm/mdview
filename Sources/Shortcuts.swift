@@ -11,11 +11,14 @@ enum ShortcutAction: String, CaseIterable {
     case scrollHalfPageDown, scrollHalfPageUp
     case jumpToTop, jumpToBottom
     case nextHeading, previousHeading
+    /// Where the reader came from and went, after following links between files.
+    case goBack, goForward
     // Finding.
     case find
     // Panels and overlays.
     case toggleSidebar, toggleContents, toggleFrontMatter
     case toggleShortcutsHelp, dismissOverlay
+    case quickOpen
     // File.
     case openFile, addFolder, reload, reloadRenderer, revealInFinder, copyDocument
     case printDocument
@@ -149,7 +152,7 @@ extension Shortcut.Key {
 struct KeyContext: Equatable {
     /// What is covering the document, if anything.
     enum Overlay: Equatable {
-        case none, settings, frontMatter, help
+        case none, settings, frontMatter, help, quickOpen
     }
 
     /// The document window is where this keystroke landed. An open or print
@@ -199,6 +202,12 @@ enum Shortcuts {
         Shortcut(
             key: .char("N"), action: .previousHeading,
             title: "Previous heading", group: .reading, handledBy: .monitor),
+        Shortcut(
+            key: .char("["), modifiers: .command, action: .goBack,
+            title: "Back to the previous document", group: .reading, handledBy: .monitor),
+        Shortcut(
+            key: .char("]"), modifiers: .command, action: .goForward,
+            title: "Forward to where you were", group: .reading, handledBy: .monitor),
 
         // Finding.
         Shortcut(
@@ -208,22 +217,17 @@ enum Shortcuts {
             key: .char("f"), modifiers: .command, action: .find,
             title: "Find in document", group: .finding, handledBy: .menu),
 
-        // Panels. Each toggle gets a plain key, a bracket combo, and the menu
-        // item it has always had.
+        // Panels. Each toggle keeps its plain key and its menu item; the
+        // bracket combos now belong to back and forward, the way every browser
+        // and Safari reads them.
         Shortcut(
             key: .char("h"), action: .toggleSidebar,
-            title: "Toggle the sidebar", group: .panels, handledBy: .monitor),
-        Shortcut(
-            key: .char("["), modifiers: .command, action: .toggleSidebar,
             title: "Toggle the sidebar", group: .panels, handledBy: .monitor),
         Shortcut(
             key: .char("b"), modifiers: .command, action: .toggleSidebar,
             title: "Toggle the sidebar", group: .panels, handledBy: .menu),
         Shortcut(
             key: .char("l"), action: .toggleContents,
-            title: "Toggle the contents panel", group: .panels, handledBy: .monitor),
-        Shortcut(
-            key: .char("]"), modifiers: .command, action: .toggleContents,
             title: "Toggle the contents panel", group: .panels, handledBy: .monitor),
         Shortcut(
             key: .char("o"), modifiers: [.command, .option], action: .toggleContents,
@@ -235,6 +239,9 @@ enum Shortcuts {
             title: "Front matter", group: .edit, handledBy: .menu),
 
         // File.
+        Shortcut(
+            key: .char("p"), modifiers: .command, action: .quickOpen,
+            title: "Quick Open", group: .file, handledBy: .menu),
         Shortcut(
             key: .char("o"), modifiers: .command, action: .openFile,
             title: "Open a file", group: .file, handledBy: .menu),
@@ -250,8 +257,9 @@ enum Shortcuts {
         Shortcut(
             key: .char("c"), modifiers: [.command, .option], action: .copyDocument,
             title: "Copy the document source", group: .file, handledBy: .menu),
+        // Print moves over for Quick Open; it is the rarer act in a reader.
         Shortcut(
-            key: .char("p"), modifiers: .command, action: .printDocument,
+            key: .char("P"), modifiers: .command, action: .printDocument,
             title: "Print", group: .file, handledBy: .menu),
 
         // View.
@@ -377,6 +385,11 @@ enum Shortcuts {
             }
         case .settings, .frontMatter:
             // Both dismiss themselves, Escape included.
+            return nil
+        case .quickOpen:
+            // Its field is an NSTextField in the chrome, so typing never gets
+            // this far (editingChromeText), and Escape belongs to the panel's
+            // onExitCommand — which only fires if nothing consumes it first.
             return nil
         }
     }

@@ -54,12 +54,15 @@ struct SidebarView: View {
 
     private var tree: some View {
         ScrollView {
+            // Keyed on the rows themselves: folders disclosing animate their
+            // children in and out instead of the list snapping to full height.
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(workspace.rows) { row in
                     SidebarRowView(
                         row: row, selectedID: selectedRowID, palette: palette,
                         workspace: workspace, doc: doc)
                 }
+                .animation(.easeOut(duration: 0.16), value: workspace.rows.map(\.id))
             }
             .padding(.horizontal, 9.2)
             .padding(.bottom, Self.pad)
@@ -178,6 +181,8 @@ struct SidebarRowView: View {
         .padding(.trailing, 9.2)
         .frame(height: SidebarView.rowHeight)
         .background(rowBackground)
+        .animation(.easeOut(duration: 0.14), value: hovering)
+        .animation(.easeOut(duration: 0.16), value: isCurrent)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { activate() }
@@ -195,6 +200,7 @@ struct SidebarRowView: View {
             .font(.system(size: node.isDirectory ? 9 : 10.5, weight: .medium))
             .foregroundStyle(isCurrent ? palette.accentText : palette.text.opacity(0.62))
             .rotationEffect(.degrees(node.isDirectory && node.isExpanded ? 90 : 0))
+            .animation(.easeOut(duration: 0.15), value: node.isExpanded)
             .frame(width: 12, alignment: .leading)
     }
 

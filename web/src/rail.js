@@ -6,7 +6,7 @@
  * it.
  */
 
-import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
+import { KEYBOARD_SCROLL_BEHAVIOR, smoothBehavior } from "./motion.js";
 
 const SNIPPET_CHARS = 116;
 /** Tick length by heading level, before any hover swell. */
@@ -68,11 +68,14 @@ export function createRail(post) {
    * in flight makes the next press re-aim from wherever the animation had got
    * to rather than from the heading just landed on.
    *
+   * Under prefers-reduced-motion the default is instant too: a glide is exactly
+   * what the reader asked not to be given. See ./motion.js.
+   *
    * Note "auto" is not the way to ask for that: it inherits `scroll-behavior`
    * from the stylesheet, which is `smooth`, rather than overriding it. See
    * ./motion.js.
    */
-  function jumpTo(index, behavior = "smooth") {
+  function jumpTo(index, behavior = smoothBehavior()) {
     if (!headings[index]) return;
     window.scrollTo({ top: landingFor(index), behavior });
   }
@@ -161,9 +164,17 @@ export function createRail(post) {
   }
 
   window.addEventListener("scroll", trackScroll, { passive: true });
+  // A window drag fires resize continuously, and each pass re-measures every
+  // heading — a full layout read per event. Coalesced to one per frame.
+  let resizePending = false;
   window.addEventListener("resize", () => {
-    headings = outlined ? readOutline(document.getElementById("doc")) : [];
-    trackScroll();
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(() => {
+      resizePending = false;
+      headings = outlined ? readOutline(document.getElementById("doc")) : [];
+      trackScroll();
+    });
   });
 
   return {

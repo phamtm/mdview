@@ -235,6 +235,29 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
+    /// Every openable file in the library, folders closed or not.
+    ///
+    /// For Quick Open, which must see the whole tree rather than whatever
+    /// happens to be expanded on screen. Reading an unloaded folder is one
+    /// directory listing; a library of added project folders stays small enough
+    /// that doing this when the panel opens is instant, and it means results
+    /// are never missing files the reader has simply not expanded yet.
+    func allFiles() -> [FileNode] {
+        var files: [FileNode] = []
+
+        func walk(_ node: FileNode) {
+            guard node.isDirectory else {
+                files.append(node)
+                return
+            }
+            node.loadForSearch()
+            node.children.forEach(walk)
+        }
+
+        roots.forEach(walk)
+        return files
+    }
+
     private func expand(_ node: FileNode, towards path: String) {
         node.isExpanded = true
         for child in node.children

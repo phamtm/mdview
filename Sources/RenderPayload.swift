@@ -18,9 +18,13 @@ struct RenderPayload {
     var size: String
     var alignment: String
     var measure: Double
+    /// A reading position to restore, for a document reopened after a launch.
+    /// The page keeps its own session memory, which wins when it has one; this
+    /// only covers coming back to a file the app was quit on. nil omits the key.
+    var resumeY: Double?
 
     var dictionary: [String: Any] {
-        [
+        var payload: [String: Any] = [
             "markdown": markdown,
             "path": path,
             "dir": dir,
@@ -32,6 +36,10 @@ struct RenderPayload {
             "alignment": alignment,
             "measure": measure,
         ]
+        if let resumeY {
+            payload = payload.merging(["resumeY": resumeY]) { _, new in new }
+        }
+        return payload
     }
 
     /// The JS call to evaluate, or nil if the payload cannot be encoded.

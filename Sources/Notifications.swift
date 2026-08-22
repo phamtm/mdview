@@ -33,6 +33,8 @@ extension Notification.Name {
     static let mdvDismissFind = Notification.Name("mdv.dismissFind")
     /// Opens the shortcuts overlay; handled by `ViewerView`.
     static let mdvShowShortcuts = Notification.Name("mdv.showShortcuts")
+    /// Opens Quick Open; handled by `ViewerView`.
+    static let mdvQuickOpen = Notification.Name("mdv.quickOpen")
     /// Carries a Bool: an input inside the page took or lost focus.
     static let mdvPageInputFocus = Notification.Name("mdv.pageInputFocus")
 }

@@ -18,6 +18,7 @@ struct ViewerView: View {
     @State private var showSettings = false
     @State private var showFrontmatter = false
     @State private var showShortcuts = false
+    @State private var showQuickOpen = false
     /// Reported by the page: an input in there has focus, so plain keys are its
     /// own. See the `pageFocus` message in web/src/viewer.js.
     @State private var pageInputFocused = false
@@ -152,6 +153,21 @@ struct ViewerView: View {
                     .transition(.opacity)
             }
         }
+        .overlay(alignment: .top) {
+            if showQuickOpen {
+                ZStack(alignment: .top) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { showQuickOpen = false }
+                    QuickOpenPanel(
+                        workspace: workspace, doc: doc, palette: palette,
+                        close: { showQuickOpen = false }
+                    )
+                    .padding(.top, 84)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
         // Everything in Shortcuts.all that is not a menu item. The closure is
         // asked at the keystroke, and re-supplied on every update, so no flag it
         // reads can be stale.
@@ -161,6 +177,9 @@ struct ViewerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvShowShortcuts)) { _ in
             showShortcuts = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mdvQuickOpen)) { _ in
+            showQuickOpen = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvPageInputFocus)) { note in
             pageInputFocused = (note.object as? NSNumber)?.boolValue ?? false
@@ -224,6 +243,7 @@ struct ViewerView: View {
         // continuously, and animating *that* would make the drag lag the pointer.
         .animation(.easeOut(duration: 0.2), value: sidebarVisible)
         .animation(.easeOut(duration: 0.2), value: outlineVisible)
+        .animation(.easeOut(duration: 0.18), value: showQuickOpen)
     }
 
     // A panel is capped by what the window can spare: the other panel, plus the
@@ -302,6 +322,7 @@ struct ViewerView: View {
         if showShortcuts { return .help }
         if showSettings { return .settings }
         if showFrontmatter, doc.url != nil { return .frontMatter }
+        if showQuickOpen { return .quickOpen }
         return .none
     }
 
@@ -315,6 +336,9 @@ struct ViewerView: View {
         case .toggleSidebar: toggleSidebar()
         case .toggleContents: toggleOutline()
         case .toggleShortcutsHelp: showShortcuts.toggle()
+        case .quickOpen: showQuickOpen = true
+        case .goBack: doc.goBack()
+        case .goForward: doc.goForward()
         case .dismissOverlay:
             if showShortcuts { showShortcuts = false } else { post(.mdvDismissFind) }
         case .scrollHalfPageDown: post(.mdvScrollHalfPage, 1)
@@ -485,6 +509,11 @@ struct TitleBar: View {
             .frame(height: TitleBar.metaRowHeight)
             .foregroundStyle(showingFrontmatter ? palette.accentText : palette.muted)
         }
+        // A document swap used to hard-cut both lines; a short crossfade makes
+        // opening the next file read as one continuous motion.
+        .animation(.easeInOut(duration: 0.18), value: name)
+        .contentTransition(.opacity)
+        .animation(.easeInOut(duration: 0.18), value: meta)
         .padding(.horizontal, 13.8)
         .padding(.vertical, 3)
         .frame(maxWidth: .infinity)

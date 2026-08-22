@@ -43,16 +43,46 @@ final class DocumentModel: ObservableObject {
     @Published var outline = Outline()
     /// Bumped on every content change so the web view knows to re-render.
     @Published private(set) var revision = 0
+    /// Whether the reader has somewhere behind or ahead to go. Drives the menu
+    /// items' enabled state; the stacks themselves stay private so every path
+    /// through `open` records itself the same way.
+    @Published private(set) var canGoBack = false
+    @Published private(set) var canGoForward = false
+    /// A reading position to hand back to the page on the next render, for a
+    /// document reopened after a launch (or after enough other files that the
+    /// page's own session memory dropped it). Consumed by the web view.
+    var pendingResumeY: Double?
 
     private var watcher: FileWatcher?
     private let recentsKey = "recentDocuments"
     private let lastDocumentKey = "lastDocument"
     private let maxRecents = 12
 
+    // Reading positions, by canonical path, kept across launches. The page
+    // reports a position as the reader settles and remembers its own within a
+    // session; this map is what makes reopening tomorrow land where today left
+    // off. `scrollOrder` is the same keys, most recently touched last, so the
+    // cap evicts the stalest rather than an arbitrary one.
+    private var scrollMemory: [String: Double] = [:]
+    private var scrollOrder: [String] = []
+    private var scrollPersistTask: Task<Void, Never>?
+    private let scrollMemoryKey = "readingPositions"
+    private let maxRememberedPositions = 64
+
+    // Where the reader has been, for ⌘[ / ⌘]. Following a link between notes
+    // is only pleasant if getting back is one keystroke away.
+    private var backStack: [URL] = []
+    private var forwardStack: [URL] = []
+
     private init() {
         recents = (UserDefaults.standard.stringArray(forKey: recentsKey) ?? [])
             .map(URL.init(fileURLWithPath:))
             .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if let saved = UserDefaults.standard.dictionary(forKey: scrollMemoryKey)
+            as? [String: Double]
+        {
+            scrollMemory = saved.filter { $0.value.isFinite && $0.value >= 0 }
+        }
     }
 
     var lastDocument: URL? {
@@ -63,11 +93,27 @@ final class DocumentModel: ObservableObject {
     }
 
     /// `remember: false` keeps a diagnostic run out of the recents list.
+    /// Navigation-passing false keeps ⌘[ from pushing the document it is
+    /// leaving back onto its own stack.
     func open(_ target: URL, remember: Bool = true) {
+        open(target, remember: remember, recordHistory: true)
+    }
+
+    private func open(_ target: URL, remember: Bool, recordHistory: Bool) {
         let resolved = target.standardizedFileURL
+        if recordHistory, let current = url, current != resolved {
+            // A fresh forward journey abandons the old one, as in every browser.
+            backStack.append(current)
+            if backStack.count > maxRecents { backStack.removeFirst() }
+            forwardStack.removeAll()
+        }
         url = resolved
         canonicalPath = resolved.resolvingSymlinksInPath().path
         frontmatter = Frontmatter()
+        // The position to land at. The page's own session memory is checked
+        // first by the page itself; this only fills in when it has none — a
+        // relaunch, mostly.
+        pendingResumeY = canonicalPath.flatMap { scrollMemory[$0] }
         // wordCount is deliberately *not* cleared: the page reports the new one
         // within a frame (it posts before it renders), so clearing here would
         // empty the titlebar's second row and back again on every open, every
@@ -79,6 +125,42 @@ final class DocumentModel: ObservableObject {
         // Watch after loading so an editor's atomic save can't slip past us.
         watcher = FileWatcher(url: resolved) { [weak self] in
             Task { @MainActor in self?.load() }
+        }
+    }
+
+    // MARK: Back / forward
+
+    /// Where the reader came from. Opening the file again re-enters the normal
+    /// flow: this push lands on the stack we just came home to, so toggling
+    /// between two files works and nothing grows unbounded.
+    func goBack() {
+        guard let previous = backStack.popLast() else { return }
+        if let current = url { forwardStack.append(current) }
+        open(previous, remember: true, recordHistory: false)
+    }
+
+    func goForward() {
+        guard let next = forwardStack.popLast() else { return }
+        if let current = url { backStack.append(current) }
+        open(next, remember: true, recordHistory: false)
+    }
+
+    /// The page reports where the reader settled; kept per canonical path and
+    /// persisted (coalesced), so tomorrow's reopen resumes today's place.
+    func rememberScroll(path: String, y: Double) {
+        let key = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        guard y.isFinite, y >= 0 else { return }
+        scrollMemory[key] = y
+        scrollOrder.removeAll { $0 == key }
+        scrollOrder.append(key)
+        while scrollOrder.count > maxRememberedPositions {
+            scrollMemory.removeValue(forKey: scrollOrder.removeFirst())
+        }
+        scrollPersistTask?.cancel()
+        scrollPersistTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled, let self else { return }
+            UserDefaults.standard.set(self.scrollMemory, forKey: self.scrollMemoryKey)
         }
     }
 

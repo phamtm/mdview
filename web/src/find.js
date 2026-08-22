@@ -156,6 +156,7 @@ const tagOf = (node) => (node && node.parentElement ? node.parentElement.tagName
 export function createFindBar() {
   const bar = document.getElementById("findbar");
   const field = document.getElementById("findinput");
+  const count = document.getElementById("findcount");
   const all = new Highlight();
   const current = new Highlight();
   CSS.highlights.set(ALL, all);
@@ -165,12 +166,21 @@ export function createFindBar() {
   let matches = [];
   /** Which of them is the current one, or -1. */
   let index = -1;
+  /**
+   * The flattened text of #doc, built once per render and reused across
+   * keystrokes. Building it walks the whole DOM, so doing that on every input
+   * event made each letter cost a full pass over a long document. `refresh()`
+   * drops it, because that is the one moment the document underneath changes;
+   * closing the bar keeps it, so ⌘F again is instant.
+   */
+  let cachedIndex = null;
 
   /** Ranges for `query`, case-insensitively, over the flat text of #doc. */
   function collect(query) {
     const root = document.getElementById("doc");
     if (!root || !query) return [];
-    const { text, runs } = buildIndex(root);
+    if (!cachedIndex) cachedIndex = buildIndex(root);
+    const { text, runs } = cachedIndex;
     // toLowerCase is length-preserving for everything but a few Unicode
     // oddities (U+0130 lowercases to two units). If it is not, every offset
     // after it would shift, so match case rather than highlight the wrong words.
@@ -202,6 +212,12 @@ export function createFindBar() {
     clear();
     matches.forEach((range, at) => (at === index ? current : all).add(range));
     bar.classList.toggle("nomatch", !!field.value && matches.length === 0);
+    // "3 of 47", as every native find bar counts. Empty when there is nothing
+    // to count — no query, or a query with no matches (the field itself goes
+    // red for that).
+    if (!count) return;
+    count.textContent = matches.length ? `${index + 1} of ${matches.length}` : "";
+    count.classList.toggle("shown", matches.length > 0);
   }
 
   /** The first match at or below the top of the viewport, so a keystroke does
@@ -234,14 +250,24 @@ export function createFindBar() {
     reveal();
   }
 
-  /** The next match, or the previous one. Wraps, as window.find did. */
+  /** The next match, or the previous one. Wraps, as window.find did — and says
+      so, with a brief pulse on the counter, because a wrap that happens in
+      silence reads as a search that skipped something. */
   function step(backwards) {
     if (!matches.length) update();
     if (!matches.length) return;
     const count = matches.length;
+    const before = index;
     index =
       index < 0 ? (backwards ? count - 1 : 0) : (index + (backwards ? -1 : 1) + count) % count;
+    const wrapped =
+      before >= 0 && (backwards ? index > before || index === count - 1 : index < before);
     paint();
+    if (wrapped && count > 1) {
+      bar.classList.remove("wrapped");
+      void bar.offsetWidth; // restart the animation if a pulse is still running
+      bar.classList.add("wrapped");
+    }
     reveal();
   }
 
@@ -258,19 +284,24 @@ export function createFindBar() {
     // anyway, but if it ever did not, every plain key would stay disabled.
     field.blur();
     bar.hidden = true;
-    bar.classList.remove("nomatch");
+    bar.classList.remove("nomatch", "wrapped");
     matches = [];
     index = -1;
     clear();
+    if (count) {
+      count.textContent = "";
+      count.classList.remove("shown");
+    }
     window.focus();
   }
 
   /** A new document has replaced the old one, so every Range points at nodes
-      that are gone. Search again if the bar is open; drop the ranges if not. */
+      that are gone, and so is the cached index of the old text. */
   function refresh() {
     matches = [];
     index = -1;
     clear();
+    cachedIndex = null;
     if (bar.hidden) {
       bar.classList.remove("nomatch");
       return;

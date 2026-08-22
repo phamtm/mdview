@@ -30,6 +30,80 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   let diagramPass = 0; // unique ids per mermaid draw pass
   let diagrams = []; // {el, code} for the document on screen
 
+  // Where the reader was in each document this session, by path. A document
+  // left and come back to reopens where it was left — pixel-exact, because it
+  // is the same DOM that position was measured on. Swift keeps its own map for
+  // positions across launches, which arrives as payload.resumeY.
+  const scrollMemory = new Map();
+  // Debounce for reporting the settled position to Swift, which persists the
+  // last few across launches.
+  let scrollPostTimer = 0;
+
+  /**
+   * Where the reader is, as an anchor rather than a pixel offset.
+   *
+   * A live reload restores `window.scrollY`, but the content above it has just
+   * been re-laid-out from the edited source: add or remove a line before the
+   * viewport and every pixel below shifts by a line height, so the sentence
+   * being read drifts up or down on each save — worse the further up the edit
+   * was. The nearest heading above the viewport plus the distance into its
+   * section is stable under exactly those edits.
+   *
+   * Also captured here: which <details> are open. They are the one interactive
+   * state in a rendered document, and a full innerHTML replacement resets them,
+   * which made every save fold the section the reader had opened.
+   */
+  function captureReadingAnchor() {
+    const headings = elDoc.querySelectorAll("h1, h2, h3, h4, h5, h6");
+    const y = window.scrollY;
+    let index = -1;
+    let offset = y;
+    for (let i = 0; i < headings.length; i++) {
+      const top = headings[i].getBoundingClientRect().top + y;
+      if (top <= y + 1) {
+        index = i;
+        offset = y - top;
+      } else break;
+    }
+    const open = [];
+    elDoc.querySelectorAll("details").forEach((d, at) => {
+      if (d.open) open.push(at);
+    });
+    return { index, offset, open };
+  }
+
+  /** Re-opens the <details> the previous DOM had open, by their position. */
+  function restoreOpenDetails(open) {
+    if (!open.length) return;
+    const details = elDoc.querySelectorAll("details");
+    open.forEach((at) => {
+      if (details[at]) details[at].open = true;
+    });
+  }
+
+  /**
+   * Lands the viewport back on the anchor the old DOM recorded.
+   *
+   * The offset is clamped to the new gap between the anchor heading and the
+   * next one: if the edit removed most of the section the reader was deep in,
+   * the raw offset would overshoot into the next section entirely.
+   */
+  function restoreReadingAnchor(anchor) {
+    const headings = elDoc.querySelectorAll("h1, h2, h3, h4, h5, h6");
+    if (anchor.index >= 0 && headings[anchor.index]) {
+      const heading = headings[anchor.index];
+      let top = heading.getBoundingClientRect().top + window.scrollY;
+      const next = headings[anchor.index + 1];
+      const limit = next ? next.getBoundingClientRect().top + window.scrollY : Infinity;
+      top += Math.min(anchor.offset, Math.max(0, limit - top - 1));
+      window.scrollTo(0, top);
+      return;
+    }
+    // Nothing above the viewport to anchor to — a pixel offset is then still
+    // exact, because everything above is empty.
+    window.scrollTo(0, anchor.offset);
+  }
+
   // gfm covers tables, strikethrough, task lists and autolinks. Footnotes are a
   // GitHub extension on top of that, so they come from a marked plugin.
   marked.use({ gfm: true, breaks: false, pedantic: false });
@@ -184,6 +258,12 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
         caption.appendChild(label);
         const holder = document.createElement("div");
         holder.className = "mermaid";
+        // Reserved until the SVG lands, which is asynchronous: without it the
+        // rest of the document jumps down by a diagram's height mid-read.
+        holder.style.minHeight = "80px";
+        // The fade-in is skipped on a hidden page: CSS animation clocks do not
+        // tick there, so the SVG would freeze at opacity 0. See render().
+        holder.classList.toggle("fade", !document.hidden);
         figure.appendChild(caption);
         figure.appendChild(holder);
         pre.replaceWith(figure);
@@ -313,6 +393,46 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       const li = box.parentElement;
       li.classList.add("task");
       if (box.checked) li.classList.add("done");
+    });
+  }
+
+  /**
+   * Images arrive without jank and fade in once painted.
+   *
+   * `decoding: async` keeps a large picture off the main thread as it decodes.
+   * Everything more than two viewports down also becomes `loading: lazy`, so a
+   * long document fetches pictures on approach rather than all at once; nearer
+   * ones stay eager, so the first screenful never waits on the decision.
+   * Measuring getBoundingClientRect here is free — layout has already been
+   * forced by the passes above.
+   *
+   * The fade: an image that pops in mid-read yanks the eye. `.loaded` turns the
+   * opacity on over a beat instead (style.css). Cached images are complete
+   * before this runs, so they settle immediately rather than fading from blank.
+   */
+  function decorateImages(root) {
+    const canFade = !document.hidden;
+    root.querySelectorAll("img").forEach((img) => {
+      img.setAttribute("decoding", "async");
+      if (img.getBoundingClientRect().top > window.innerHeight * 2) {
+        img.setAttribute("loading", "lazy");
+      }
+      // A hidden page cannot animate — its transition clock is stopped — so
+      // there the image simply gets its final state.
+      if (!canFade) return;
+      img.classList.add("pending");
+      const settle = () => {
+        img.classList.remove("pending");
+        img.classList.add("loaded");
+      };
+      if (img.complete && img.naturalWidth > 0) {
+        settle();
+        return;
+      }
+      img.addEventListener("load", settle, { once: true });
+      // A broken picture must not sit invisible forever: show whatever WebKit
+      // draws for it.
+      img.addEventListener("error", () => img.classList.remove("pending"), { once: true });
     });
   }
 
@@ -464,6 +584,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     svg.removeAttribute("height");
     svg.style.maxWidth = "100%";
     svg.style.height = "auto";
+    host.style.minHeight = "";
 
     const accent = palette.accent;
     const text = palette.text;
@@ -507,6 +628,26 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   const rail = createRail(post);
   elEmpty.addEventListener("click", () => post({ action: "openPanel" }));
 
+  // Tell Swift where the reader settled, so the position survives a relaunch
+  // (it comes back as payload.resumeY). Within a session the page remembers by
+  // itself; this only has to be roughly current, hence the debounce.
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!current.path) return;
+      clearTimeout(scrollPostTimer);
+      scrollPostTimer = setTimeout(() => {
+        if (!current.path) return;
+        post({
+          action: "scrollPosition",
+          path: current.path,
+          y: Math.round(window.scrollY),
+        });
+      }, 350);
+    },
+    { passive: true }
+  );
+
   const THEMES = ["paper", "vellum", "night"];
   const SIZES = ["small", "regular", "large"];
 
@@ -517,6 +658,16 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       root.dataset.theme = theme;
     } else {
       delete root.dataset.theme;
+    }
+    // Let the repaint cross-fade instead of snapping: for a beat every themed
+    // property transitions (see the .theming rules in style.css), then the
+    // class goes away so ordinary hover/scroll work carries no transition cost.
+    // Only on a visible page — a hidden one cannot animate, and a frozen
+    // transition here would hold the *previous* palette on screen.
+    if (!document.hidden) {
+      root.classList.add("theming");
+      clearTimeout(applyTheme.timer);
+      applyTheme.timer = setTimeout(() => root.classList.remove("theming"), 260);
     }
   }
 
@@ -548,7 +699,28 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   function render(payload) {
     const token = ++renderToken;
     const samePage = payload.path && payload.path === current.path;
-    const keepY = samePage ? window.scrollY : 0;
+    // Where the reader is in the document being left, and where to land in the
+    // one being opened. Session memory wins — it is exact for this launch;
+    // Swift's resumeY covers coming back after a relaunch.
+    if (!samePage && current.path) {
+      scrollMemory.set(current.path, window.scrollY);
+      if (scrollMemory.size > 64) scrollMemory.delete(scrollMemory.keys().next().value);
+    }
+    let landingY = 0;
+    if (!samePage && payload.path) {
+      if (scrollMemory.has(payload.path)) {
+        landingY = scrollMemory.get(payload.path);
+      } else {
+        const resume = Number(payload.resumeY);
+        if (Number.isFinite(resume) && resume > 0) landingY = resume;
+      }
+    }
+    // Reading position, read off the DOM before it is replaced.
+    const anchor = samePage ? captureReadingAnchor() : null;
+    // An arrival animation is for a *different* document, seen by someone —
+    // the first render is not that, and neither is any render into a hidden
+    // page. See the end of this function for why the visibility half matters.
+    const switching = !samePage && !!payload.path && !!current.path;
     current = { path: payload.path || "", dir: payload.dir || "" };
 
     if (!payload.path) {
@@ -562,7 +734,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
     if (payload.error) {
       elDoc.innerHTML = '<div class="error">' + escapeHtml(payload.error) + "</div>";
-      elDoc.classList.add("ready");
       appliedFormat = "";
       return;
     }
@@ -630,6 +801,8 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       FORBID_ATTR: ["data-chrome"],
     });
 
+    if (anchor) restoreOpenDetails(anchor.open);
+
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
       const header = frontmatterHeader(split.fields, firstHeading && firstHeading.textContent);
@@ -645,17 +818,40 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     // hrefs unchanged, so DOMPurify is what removes `javascript:` ones.
     resolveLocalPaths(elDoc);
     markTaskItems(elDoc);
+    decorateImages(elDoc);
 
     // Restore position without animating there.
     const root = document.documentElement;
     const behavior = root.style.scrollBehavior;
     root.style.scrollBehavior = "auto";
-    window.scrollTo(0, keepY);
+    if (samePage) {
+      restoreReadingAnchor(anchor);
+    } else {
+      window.scrollTo(0, landingY);
+    }
     requestAnimationFrame(() => {
       root.style.scrollBehavior = behavior;
     });
 
-    elDoc.classList.add("ready");
+    // A document the reader has never seen fades up; a live reload swaps under
+    // them with no ceremony at all. The entrance is opt-in per render —
+    // `.enter` hides the fresh content, a reflow commits that, and removing it
+    // a frame later is what `.settle` turns into the fade-and-rise.
+    //
+    // Only on a page that can paint. A hidden page's clocks do not tick: rAF
+    // never runs, and a transition started there freezes at its first frame.
+    // Since the document's resting state is fully visible (style.css), a
+    // skipped animation costs nothing — the content is simply there, which in
+    // a window nobody sees is exactly right. This is load-bearing for the
+    // offscreen test harnesses, which caught the frozen-blank page this
+    // comment describes.
+    const entering = switching && !document.hidden;
+    if (entering) {
+      elDoc.classList.add("enter", "settle");
+      void elDoc.offsetWidth;
+      requestAnimationFrame(() => elDoc.classList.remove("enter"));
+      setTimeout(() => elDoc.classList.remove("settle"), 240);
+    }
     // getBoundingClientRect forces layout, so heading offsets are already real —
     // no need to wait for a frame, which never arrives when the window is
     // offscreen and rAF is throttled.

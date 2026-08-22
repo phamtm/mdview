@@ -78,7 +78,7 @@ MainActor.assumeIsolated {
 
     // A combo cannot be typed, so it still belongs to us.
     send("]", keyCode: 30, flags: .command)
-    check("⌘] still fired while typing", fired == [.toggleContents])
+    check("⌘] still fired while typing", fired == [.goForward])
     check("⌘] left the text field alone", field.stringValue == "j")
 
     // An unbound letter is swallowed elsewhere, to stop the beep — but never

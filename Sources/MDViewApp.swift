@@ -92,6 +92,11 @@ struct ViewerCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
+            // Quick Open is the fast way between files; ⌘P belongs to it in a
+            // reader, where printing is the rarer act (⇧⌘P now).
+            Button("Quick Open…") { send(.mdvQuickOpen) }
+                .keyboardShortcut("p")
+
             Button("Open…") { doc.openPanel() }
                 .keyboardShortcut("o")
 
@@ -125,7 +130,7 @@ struct ViewerCommands: Commands {
                 .disabled(doc.url == nil)
             Divider()
             Button("Print…") { send(.mdvPrint) }
-                .keyboardShortcut("p")
+                .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(doc.url == nil)
         }
 

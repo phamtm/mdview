@@ -142,6 +142,8 @@ struct ViewerWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.underPageBackgroundColor = NSColor(background)
         webView.allowsMagnification = true
+        // Restored zoom applies from the first paint.
+        webView.pageZoom = context.coordinator.zoom
         webView.onDroppedFile = { url in
             Task { @MainActor in DocumentModel.shared.open(url) }
         }
@@ -169,9 +171,17 @@ struct ViewerWebView: NSViewRepresentable {
         weak var webView: DroppableWebView?
         private var pageReady = false
         private var renderedRevision = -1
-        private var zoom: CGFloat = 1
+        /// Zoom persists across launches: a reader who needs 125% should not
+        /// have to press ⌘= every morning.
+        var zoom: CGFloat {
+            didSet { UserDefaults.standard.set(Double(zoom), forKey: "pageZoom") }
+        }
 
-        init(doc: DocumentModel) { self.doc = doc }
+        init(doc: DocumentModel) {
+            self.doc = doc
+            let stored = UserDefaults.standard.object(forKey: "pageZoom") as? Double ?? 1
+            zoom = CGFloat(min(max(stored, 0.5), 3.0))
+        }
 
         // MARK: Rendering
 
@@ -179,6 +189,8 @@ struct ViewerWebView: NSViewRepresentable {
             guard pageReady, let webView, renderedRevision != doc.revision else { return }
             renderedRevision = doc.revision
             let settings = RenderPayload.settings()
+            let resumeY = doc.pendingResumeY
+            doc.pendingResumeY = nil  // consumed: a later re-render must not yank the reader
             let payload = RenderPayload(
                 markdown: doc.markdown,
                 path: doc.url?.path ?? "",
@@ -189,7 +201,8 @@ struct ViewerWebView: NSViewRepresentable {
                 theme: settings.theme,
                 size: settings.size,
                 alignment: settings.alignment,
-                measure: settings.measure
+                measure: settings.measure,
+                resumeY: resumeY
             )
             guard let call = payload.renderCall else { return }
             webView.evaluateJavaScript(call)
@@ -276,6 +289,13 @@ struct ViewerWebView: NSViewRepresentable {
                 NotificationCenter.default.post(
                     name: .mdvPageInputFocus,
                     object: NSNumber(value: body["focused"] as? Bool ?? false))
+            case "scrollPosition":
+                // Where the reader settled. Kept per file so a document reopened
+                // after a relaunch resumes where it was left; the page handles
+                // the within-a-session case itself.
+                if let path = body["path"] as? String, let y = body["y"] as? Double {
+                    doc.rememberScroll(path: path, y: y)
+                }
             case "copyText":
                 if let text = body["text"] as? String {
                     NSPasteboard.general.clearContents()
