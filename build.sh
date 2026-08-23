@@ -20,8 +20,9 @@ echo "==> cleaning"
 rm -rf "$OUT"
 mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
 
-# The page is an npm project (web/). Its build output is committed, so this works
-# without node — it only rebuilds when the sources are newer.
+# The page is an npm project (web/); its build output here is generated, never
+# committed. Rebuilt when any source is newer than the bundle — which includes
+# the case of the bundle not existing at all.
 if command -v node >/dev/null 2>&1 && [ -d web/node_modules ]; then
   needs_build=""
   for source in web/src/*.js web/build.mjs web/package.json; do

@@ -64,13 +64,16 @@ npm run watch             # rebuild on save, then ⌥⌘R in the app
 | `web/src/util.js` | Tiny shared helpers (`escapeHtml`) |
 | `web/src/mermaid.js` | Diagram entry point, built as its own file |
 | `web/build.mjs` | esbuild config for the two bundles |
-| `Resources/bundle.js` | **Generated.** Don't edit |
-| `Resources/mermaid.js` | **Generated.** Injected on demand, never loaded otherwise |
+| `Resources/bundle.js` | **Generated**, gitignored. Don't edit |
+| `Resources/mermaid.js` | **Generated**, gitignored. Injected on demand, never loaded otherwise |
 
-Build output is committed, so `./build.sh` works on a machine without node — it
-only re-bundles when `web/src` is newer. Two bundles rather than one because
-mermaid is roughly ten times the size of everything else combined, and most
-documents have no diagrams.
+The bundles are build output and are not checked in: a fresh clone needs
+`cd web && npm install` once before `./build.sh`, which fails loudly if the
+bundle is missing and node isn't there. It re-bundles only when `web/src` is
+newer than the output, so the common loop costs nothing. Two bundles rather
+than one because mermaid is roughly ten times the size of everything else
+combined, and most documents have no diagrams — which is also why the 3.3MB
+of it stays out of git history.
 
 Swapping a package is now `npm i <thing>` and an import. The output is IIFE rather
 than ESM because the page loads from `file://`, where module scripts are blocked
