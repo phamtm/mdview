@@ -242,6 +242,11 @@ final class WorkspaceModel: ObservableObject {
     /// directory listing; a library of added project folders stays small enough
     /// that doing this when the panel opens is instant, and it means results
     /// are never missing files the reader has simply not expanded yet.
+    ///
+    /// Generated and vendored directories are pruned: a library folder over a
+    /// checked-out project carries thousands of dependency files nobody ever
+    /// opened, and they flood ranked results with strangers. Skipped here
+    /// only — the sidebar still shows whatever is really on disk.
     func allFiles() -> [FileNode] {
         var files: [FileNode] = []
 
@@ -251,12 +256,22 @@ final class WorkspaceModel: ObservableObject {
                 return
             }
             node.loadForSearch()
-            node.children.forEach(walk)
+            for child in node.children {
+                if child.isDirectory, Self.searchExcludedDirectories.contains(child.name) {
+                    continue
+                }
+                walk(child)
+            }
         }
 
         roots.forEach(walk)
         return files
     }
+
+    /// Directory names whose contents are generated rather than written.
+    private static let searchExcludedDirectories: Set<String> = [
+        "node_modules", ".build", "DerivedData", "Pods", "__pycache__", ".venv", "dist",
+    ]
 
     private func expand(_ node: FileNode, towards path: String) {
         node.isExpanded = true
