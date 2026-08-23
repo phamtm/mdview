@@ -387,10 +387,11 @@ enum Shortcuts {
             // Both dismiss themselves, Escape included.
             return nil
         case .quickOpen:
-            // Its field is an NSTextField in the chrome, so typing never gets
-            // this far (editingChromeText), and Escape belongs to the panel's
-            // onExitCommand — which only fires if nothing consumes it first.
-            return nil
+            // Typing belongs to the palette's own field, which stands plain
+            // keys down above (editingChromeText). Escape is the one key that
+            // must still work when focus has moved off it — a click landed on
+            // a row or the padding — so it closes the panel from here.
+            return shortcut.action == .dismissOverlay ? .dismissOverlay : nil
         }
     }
 

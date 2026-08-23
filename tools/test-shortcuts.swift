@@ -138,6 +138,23 @@ let elsewhere = KeyContext(windowIsKey: false)
 check("j does nothing when an open panel is key", resolve(.char("j"), [], elsewhere) == nil)
 check("⌘] does nothing when an open panel is key", resolve(.char("]"), .command, elsewhere) == nil)
 
+// MARK: While Quick Open is up
+//
+// Typing belongs to the palette's own field (editingChromeText stands plain
+// keys down before the overlay is even consulted), so what matters here is
+// the moment focus has moved off that field — a click landed on a row or the
+// padding — and Escape must still close the panel.
+
+let quickOpening = KeyContext(overlay: .quickOpen)
+check("esc closes quick open", resolve(.escape, [], quickOpening) == .dismissOverlay)
+check("j does not turn the page under quick open", resolve(.char("j"), [], quickOpening) == nil)
+check(
+    "? does nothing while quick open is up",
+    resolve(.char("?"), [], quickOpening) == nil)
+check(
+    "⌘[ still goes back while quick open is up",
+    resolve(.char("["), .command, quickOpening) == .goBack)
+
 // MARK: Bare keys nothing is bound to, and the keys that must always get through
 
 /// Shorthand: what the monitor would do with this stroke.

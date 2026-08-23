@@ -198,7 +198,8 @@ To make `.md` (or `.html`) files open here by default: select one in Finder,
 | `Esc` | Close that panel, or the find bar |
 | `h`, `⌘B` | Toggle sidebar |
 | `l`, `⌥⌘O` | Toggle the contents panel |
-| `⌘P` | Quick Open — type a few letters, land on the file |
+| `⌘P` | Quick Open — type a few letters, land on the file. Press again to dismiss |
+| `⌘Enter` | In Quick Open: reveal the selected file in Finder |
 | `⌘O` | Open file |
 | `⇧⌘O` | Add folder to sidebar |
 | `⌘,` | Settings: theme, type size, alignment, column width |

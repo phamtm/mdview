@@ -190,7 +190,7 @@ struct ViewerView: View {
             showShortcuts = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvQuickOpen)) { _ in
-            showQuickOpen = true
+            toggleQuickOpen()
         }
         .onReceive(NotificationCenter.default.publisher(for: .mdvPageInputFocus)) { note in
             pageInputFocused = (note.object as? NSNumber)?.boolValue ?? false
@@ -366,11 +366,21 @@ struct ViewerView: View {
         case .toggleSidebar: toggleSidebar()
         case .toggleContents: toggleOutline()
         case .toggleShortcutsHelp: showShortcuts.toggle()
-        case .quickOpen: showQuickOpen = true
+        case .quickOpen: toggleQuickOpen()
         case .goBack: doc.goBack()
         case .goForward: doc.goForward()
         case .dismissOverlay:
-            if showShortcuts { showShortcuts = false } else { post(.mdvDismissFind) }
+            // Topmost first, mirroring keyOverlay's order. Quick Open sits in
+            // the chain for the moments its field is not first responder (a
+            // click landed on a row or the padding) — while typing, Escape
+            // passes through to the palette's own editor instead.
+            if showShortcuts {
+                showShortcuts = false
+            } else if showQuickOpen {
+                showQuickOpen = false
+            } else {
+                post(.mdvDismissFind)
+            }
         case .scrollHalfPageDown: post(.mdvScrollHalfPage, 1)
         case .scrollHalfPageUp: post(.mdvScrollHalfPage, -1)
         case .jumpToBottom: post(.mdvScrollToEdge, 1)
@@ -398,6 +408,11 @@ struct ViewerView: View {
     private func toggleOutline() { outlineVisible.toggle() }
 
     private func toggleSidebar() { sidebarVisible.toggle() }
+
+    /// ⌘P opens the palette and dismisses it again — a toggle, like every
+    /// palette people already use. The menu item fires regardless of what has
+    /// focus, so this is the one switch both entry points go through.
+    private func toggleQuickOpen() { showQuickOpen.toggle() }
 
 }
 

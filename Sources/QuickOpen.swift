@@ -25,7 +25,8 @@ struct QuickOpenPanel: View {
         VStack(spacing: 0) {
             QuickOpenField(
                 query: $query, palette: palette, onChange: { filter() },
-                onMove: moveSelection, onConfirm: confirm, onCancel: close
+                onMove: moveSelection, onConfirm: confirm, onCancel: close,
+                onReveal: revealSelected
             )
             .frame(height: 18)
             .padding(.horizontal, 13.8)
@@ -66,6 +67,18 @@ struct QuickOpenPanel: View {
                     }
                     .frame(maxHeight: 324)
                 }
+            } else if workspace.roots.isEmpty {
+                // An empty library is not an error and must not be silence.
+                VStack(spacing: 4) {
+                    Text("No folders yet")
+                        .font(Typeface.displayMatching(14))
+                        .foregroundStyle(palette.text.opacity(0.8))
+                    Text("⇧⌘O adds one to the sidebar")
+                        .font(Typeface.text(11.5))
+                        .foregroundStyle(palette.muted)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
             } else if !query.isEmpty {
                 Text("No file matches")
                     .font(Typeface.displayMatching(13))
@@ -203,9 +216,11 @@ struct QuickOpenPanel: View {
     }
     // MARK: Keys
 
+    /// Wraps at both ends, like every palette people already use: one past the
+    /// last result is the first again.
     private func moveSelection(_ delta: Int) {
         guard !results.isEmpty else { return }
-        selection = min(max(selection + delta, 0), results.count - 1)
+        selection = (selection + delta + results.count) % results.count
     }
 
     private func confirm() {
@@ -213,6 +228,14 @@ struct QuickOpenPanel: View {
         let target = results[selection].url
         close()
         doc.open(target)
+    }
+
+    /// ⌘Enter: where the file lives, without opening it here.
+    private func revealSelected() {
+        guard results.indices.contains(selection) else { return }
+        let target = results[selection].url
+        close()
+        NSWorkspace.shared.activateFileViewerSelecting([target])
     }
 
     // MARK: One row
@@ -229,9 +252,11 @@ struct QuickOpenPanel: View {
                 .foregroundStyle(palette.text)
                 .lineLimit(1)
             Spacer(minLength: 8)
+            // The path is provenance, not the result — quieter and smaller
+            // than the name, so the eye lands on what was typed for.
             Text(folder)
-                .font(Typeface.displayMatching(11))
-                .foregroundStyle(palette.muted)
+                .font(Typeface.displayMatching(10.5))
+                .foregroundStyle(palette.muted.opacity(0.7))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -269,6 +294,7 @@ private struct QuickOpenField: NSViewRepresentable {
     let onMove: (Int) -> Void
     let onConfirm: () -> Void
     let onCancel: () -> Void
+    let onReveal: () -> Void
 
     func makeNSView(context: Context) -> QuickOpenTextView {
         let view = QuickOpenTextView()
@@ -290,6 +316,9 @@ private struct QuickOpenField: NSViewRepresentable {
         view.onMove = onMove
         view.onConfirm = onConfirm
         view.onCancel = onCancel
+        view.onReveal = onReveal
+        // A bare text view has no name of its own; VoiceOver needs one.
+        view.setAccessibilityLabel("Find a file by name")
         view.delegate = context.coordinator
         // Focus on arrival: the palette exists to be typed into.
         DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
@@ -301,6 +330,7 @@ private struct QuickOpenField: NSViewRepresentable {
         view.onMove = onMove
         view.onConfirm = onConfirm
         view.onCancel = onCancel
+        view.onReveal = onReveal
         if view.string != query { view.string = query }
         let colour = NSColor(palette.text)
         if view.textColor != colour { view.textColor = colour }
@@ -334,6 +364,7 @@ final class QuickOpenTextView: NSTextView {
     var onMove: ((Int) -> Void)?
     var onConfirm: (() -> Void)?
     var onCancel: (() -> Void)?
+    var onReveal: (() -> Void)?
 
     /// We are the first responder here — no field editor in between — so this
     /// runs for every key and the palette's four mean what they say.
@@ -347,6 +378,14 @@ final class QuickOpenTextView: NSTextView {
             return
         default:
             break
+        }
+        // ⌘Enter reveals the selection in Finder instead of opening it.
+        if event.modifierFlags.contains(.command),
+            event.charactersIgnoringModifiers == "\r"
+                || event.charactersIgnoringModifiers == "\u{3}"
+        {
+            onReveal?()
+            return
         }
         switch event.charactersIgnoringModifiers {
         case "\r", "\u{3}":
