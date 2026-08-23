@@ -19,6 +19,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   const bridge =
     window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers.mdview : null;
+  /** @param {import("./contracts.js").PageMessage} msg */
   const post = (msg) => {
     if (bridge) bridge.postMessage(msg);
   };
@@ -392,6 +393,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   // --- render --------------------------------------------------------------
 
+  /** @param {import("./contracts.js").RenderPayload} payload */
   function render(payload) {
     const token = ++renderToken;
     const samePage = payload.path && payload.path === current.path;
@@ -629,27 +631,62 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     });
   }
 
+  // --- the app's command channel ---------------------------------------------
+  //
+  // Everything Swift can ask the page to do, in one table. One entry per
+  // line, at the top level, so tools/check-commands.sh can pair each against
+  // the dispatch call that sends it, both directions — the same trick that
+  // keeps the render payloads in step, which is what caught the two sides
+  // drifting once before.
+
+  const COMMANDS = {
+    openFind: () => find.open(),
+    /** Escape from the chrome. A no-op unless the find bar is actually open. */
+    dismissFind: () => find.close(),
+    /** The contents panel in the chrome asks for a jump by index. */
+    scrollToHeading: ({ index }) => rail.jumpTo(Number(index)),
+    scrollHalfPage: ({ direction }) => scrollHalfPage(Number(direction)),
+    scrollToEdge: ({ direction }) => scrollToEdge(Number(direction)),
+    /** The next heading (+1) or the previous one (-1). The rail owns the list. */
+    stepHeading: ({ direction }) => rail.step(Number(direction)),
+    /** The system appearance changed, so Mermaid must repaint its baked colours. */
+    refreshDiagrams: () => {
+      const token = renderToken;
+      diagrams.draw({
+        isCurrent: () => token === renderToken,
+        onSettled: () => rail.update(elDoc, appliedFormat !== "html"),
+      });
+    },
+  };
+
+  /**
+   * Runs one command message: `{command: "...", args: {...}}`.
+   *
+   * Unknown commands are ignored rather than thrown: a page newer or older
+   * than the app around it should degrade quietly, not take the document
+   * down with it.
+   *
+   * @param {import("./contracts.js").AppCommand} message
+   */
+  function dispatch(message) {
+    const run = message && COMMANDS[message.command];
+    if (!run) return;
+    return run(message.args || {});
+  }
+
   window.mdview = {
     render,
-    openFind: find.open,
-    /** Escape from the chrome. A no-op unless the find bar is actually open. */
-    dismissFind() {
-      find.close();
-    },
-    /** The contents panel in the chrome asks for a jump by index. */
-    scrollToHeading(index) {
-      rail.jumpTo(Number(index));
-    },
-    scrollHalfPage(direction) {
-      scrollHalfPage(Number(direction));
-    },
-    scrollToEdge(direction) {
-      scrollToEdge(Number(direction));
-    },
-    /** The next heading (+1) or the previous one (-1). The rail owns the list. */
-    stepHeading(direction) {
-      rail.step(Number(direction));
-    },
+    dispatch,
+    // Named forms of the COMMANDS entries above, for the test harnesses and
+    // the console. The app itself goes through dispatch only — a second way
+    // in would be a second thing for the contract check to miss.
+    openFind: COMMANDS["openFind"],
+    dismissFind: COMMANDS["dismissFind"],
+    scrollToHeading: (index) => dispatch({ command: "scrollToHeading", args: { index } }),
+    scrollHalfPage: (direction) => dispatch({ command: "scrollHalfPage", args: { direction } }),
+    scrollToEdge: (direction) => dispatch({ command: "scrollToEdge", args: { direction } }),
+    stepHeading: (direction) => dispatch({ command: "stepHeading", args: { direction } }),
+    refreshDiagrams: () => dispatch({ command: "refreshDiagrams" }),
     // Exposed so the test harness can exercise the parser and the word count
     // directly — and so it can assert the one decision that no offscreen render
     // can observe: keyboard motion jumps rather than animates. See ./motion.js.
@@ -666,14 +703,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       // What the find bar has found. A custom highlight is in neither computed
       // style nor the selection, so this is the only way to see it.
       findState: () => find.state(),
-    },
-    /** Called by the app when the system appearance changes. */
-    refreshDiagrams() {
-      const token = renderToken;
-      diagrams.draw({
-        isCurrent: () => token === renderToken,
-        onSettled: () => rail.update(elDoc, appliedFormat !== "html"),
-      });
     },
   };
 })();

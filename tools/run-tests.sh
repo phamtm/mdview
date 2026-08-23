@@ -87,6 +87,9 @@ echo "  ok   no scroll asks for \"auto\""
 echo "==> payload contract"
 ./tools/check-payload.sh
 
+echo "==> command contract"
+./tools/check-commands.sh
+
 echo "==> file watcher"
 ./build/test-watcher
 

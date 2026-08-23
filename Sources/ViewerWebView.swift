@@ -6,6 +6,10 @@ import WebKit
 /// navigate to them.
 final class DroppableWebView: WKWebView {
     var onDroppedFile: ((URL) -> Void)?
+    /// The system appearance changed; the page must redraw its Mermaid
+    /// diagrams, which bake colours into their SVG. Set by `makeNSView`,
+    /// which owns the coordinator that knows how to dispatch commands.
+    var onAppearanceChange: (() -> Void)?
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         droppedFile(sender) != nil ? .copy : super.draggingEntered(sender)
@@ -33,10 +37,9 @@ final class DroppableWebView: WKWebView {
         return super.performDragOperation(sender)
     }
 
-    /// Mermaid draws its own colours, so it needs a nudge on a light/dark switch.
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        evaluateJavaScript("window.mdview && window.mdview.refreshDiagrams()")
+        onAppearanceChange?()
     }
 
     private func droppedMarkdown(_ sender: NSDraggingInfo) -> URL? {
@@ -136,19 +139,23 @@ struct ViewerWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> DroppableWebView {
         let config = WKWebViewConfiguration()
-        config.userContentController.add(context.coordinator, name: "mdview")
+        let coordinator = context.coordinator
+        config.userContentController.add(coordinator, name: "mdview")
 
         let webView = DroppableWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
+        webView.navigationDelegate = coordinator
         webView.underPageBackgroundColor = NSColor(background)
         webView.allowsMagnification = true
         // Restored zoom applies from the first paint.
-        webView.pageZoom = context.coordinator.zoom
+        webView.pageZoom = coordinator.zoom
         webView.onDroppedFile = { url in
             Task { @MainActor in DocumentModel.shared.open(url) }
         }
-        context.coordinator.webView = webView
-        context.coordinator.observeMenuCommands()
+        webView.onAppearanceChange = { [weak coordinator] in
+            coordinator?.dispatch("refreshDiagrams")
+        }
+        coordinator.webView = webView
+        coordinator.observeMenuCommands()
 
         webView.loadFileURL(ViewerWebView.pageURL, allowingReadAccessTo: URL(fileURLWithPath: "/"))
 
@@ -314,7 +321,7 @@ struct ViewerWebView: NSViewRepresentable {
             ) { [weak self] note in
                 guard let index = note.object as? NSNumber else { return }
                 Task { @MainActor in
-                    self?.run("window.mdview.scrollToHeading(\(index.intValue))")
+                    self?.dispatch("scrollToHeading", ["index": index.intValue])
                 }
             }
 
@@ -329,11 +336,11 @@ struct ViewerWebView: NSViewRepresentable {
                 (.mdvScrollToEdge, "scrollToEdge"),
                 (.mdvStepHeading, "stepHeading"),
             ]
-            for (name, function) in directed {
+            for (name, command) in directed {
                 center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                     let direction = (note.object as? NSNumber)?.intValue ?? 1
                     Task { @MainActor in
-                        self?.run("window.mdview.\(function)(\(direction))")
+                        self?.dispatch(command, ["direction": direction])
                     }
                 }
             }
@@ -343,8 +350,8 @@ struct ViewerWebView: NSViewRepresentable {
                 (.mdvZoomIn, { [weak self] in self?.setZoom(delta: 0.1) }),
                 (.mdvZoomOut, { [weak self] in self?.setZoom(delta: -0.1) }),
                 (.mdvZoomReset, { [weak self] in self?.resetZoom() }),
-                (.mdvFind, { [weak self] in self?.run("window.mdview.openFind()") }),
-                (.mdvDismissFind, { [weak self] in self?.run("window.mdview.dismissFind()") }),
+                (.mdvFind, { [weak self] in self?.dispatch("openFind") }),
+                (.mdvDismissFind, { [weak self] in self?.dispatch("dismissFind") }),
                 (.mdvPrint, { [weak self] in self?.printPage() }),
                 (.mdvCopyPath, { [weak self] in self?.copyPath() }),
                 (.mdvCopyDocument, { [weak self] in self?.copyDocument() }),
@@ -359,7 +366,21 @@ struct ViewerWebView: NSViewRepresentable {
             }
         }
 
-        private func run(_ js: String) { webView?.evaluateJavaScript(js) }
+        /// Sends one app→page command: `{command: "...", args: {...}}`, run by
+        /// the page's single dispatch entry point.
+        ///
+        /// The one channel for everything Swift asks the page to do. The
+        /// command name and the page's table are kept in step by
+        /// tools/check-commands.sh, both directions — a command renamed here
+        /// without the page fails the suite, not the reader.
+        func dispatch(_ command: String, _ args: [String: Any] = [:]) {
+            var message: [String: Any] = ["command": command]
+            for (key, value) in args { message[key] = value }
+            guard let data = try? JSONSerialization.data(withJSONObject: message),
+                let literal = String(data: data, encoding: .utf8)
+            else { return }
+            webView?.evaluateJavaScript("window.mdview.dispatch(\(literal))")
+        }
 
         /// Reports what the page actually rendered, so a test can check the real
         /// app rather than a harness that builds its own payload.
