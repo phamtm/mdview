@@ -10,6 +10,7 @@ import { createRail } from "./rail.js";
 import { countWords, frontmatterHeader, panelFields, splitFrontmatter } from "./frontmatter.js";
 import { createFindBar } from "./find.js";
 import { createDiagrams } from "./diagrams.js";
+import { createReadingPosition } from "./reading-position.js";
 import { escapeHtml } from "./util.js";
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
@@ -30,80 +31,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   let renderToken = 0; // guards async mermaid work against a newer render
   let appliedFormat = ""; // which parser the last render used, for the tests
   const diagrams = createDiagrams();
-
-  // Where the reader was in each document this session, by path. A document
-  // left and come back to reopens where it was left — pixel-exact, because it
-  // is the same DOM that position was measured on. Swift keeps its own map for
-  // positions across launches, which arrives as payload.resumeY.
-  const scrollMemory = new Map();
-  // Debounce for reporting the settled position to Swift, which persists the
-  // last few across launches.
-  let scrollPostTimer = 0;
-
-  /**
-   * Where the reader is, as an anchor rather than a pixel offset.
-   *
-   * A live reload restores `window.scrollY`, but the content above it has just
-   * been re-laid-out from the edited source: add or remove a line before the
-   * viewport and every pixel below shifts by a line height, so the sentence
-   * being read drifts up or down on each save — worse the further up the edit
-   * was. The nearest heading above the viewport plus the distance into its
-   * section is stable under exactly those edits.
-   *
-   * Also captured here: which <details> are open. They are the one interactive
-   * state in a rendered document, and a full innerHTML replacement resets them,
-   * which made every save fold the section the reader had opened.
-   */
-  function captureReadingAnchor() {
-    const headings = elDoc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-    const y = window.scrollY;
-    let index = -1;
-    let offset = y;
-    for (let i = 0; i < headings.length; i++) {
-      const top = headings[i].getBoundingClientRect().top + y;
-      if (top <= y + 1) {
-        index = i;
-        offset = y - top;
-      } else break;
-    }
-    const open = [];
-    elDoc.querySelectorAll("details").forEach((d, at) => {
-      if (d.open) open.push(at);
-    });
-    return { index, offset, open };
-  }
-
-  /** Re-opens the <details> the previous DOM had open, by their position. */
-  function restoreOpenDetails(open) {
-    if (!open.length) return;
-    const details = elDoc.querySelectorAll("details");
-    open.forEach((at) => {
-      if (details[at]) details[at].open = true;
-    });
-  }
-
-  /**
-   * Lands the viewport back on the anchor the old DOM recorded.
-   *
-   * The offset is clamped to the new gap between the anchor heading and the
-   * next one: if the edit removed most of the section the reader was deep in,
-   * the raw offset would overshoot into the next section entirely.
-   */
-  function restoreReadingAnchor(anchor) {
-    const headings = elDoc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-    if (anchor.index >= 0 && headings[anchor.index]) {
-      const heading = headings[anchor.index];
-      let top = heading.getBoundingClientRect().top + window.scrollY;
-      const next = headings[anchor.index + 1];
-      const limit = next ? next.getBoundingClientRect().top + window.scrollY : Infinity;
-      top += Math.min(anchor.offset, Math.max(0, limit - top - 1));
-      window.scrollTo(0, top);
-      return;
-    }
-    // Nothing above the viewport to anchor to — a pixel offset is then still
-    // exact, because everything above is empty.
-    window.scrollTo(0, anchor.offset);
-  }
+  const reading = createReadingPosition(post);
 
   // gfm covers tables, strikethrough, task lists and autolinks. Footnotes are a
   // GitHub extension on top of that, so they come from a marked plugin.
@@ -414,26 +342,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
   const rail = createRail(post);
   elEmpty.addEventListener("click", () => post({ action: "openPanel" }));
-
-  // Tell Swift where the reader settled, so the position survives a relaunch
-  // (it comes back as payload.resumeY). Within a session the page remembers by
-  // itself; this only has to be roughly current, hence the debounce.
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (!current.path) return;
-      clearTimeout(scrollPostTimer);
-      scrollPostTimer = setTimeout(() => {
-        if (!current.path) return;
-        post({
-          action: "scrollPosition",
-          path: current.path,
-          y: Math.round(window.scrollY),
-        });
-      }, 350);
-    },
-    { passive: true }
-  );
+  reading.reportWhile(() => current.path);
 
   const THEMES = ["paper", "vellum", "night"];
   const SIZES = ["small", "regular", "large"];
@@ -486,24 +395,13 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   function render(payload) {
     const token = ++renderToken;
     const samePage = payload.path && payload.path === current.path;
-    // Where the reader is in the document being left, and where to land in the
-    // one being opened. Session memory wins — it is exact for this launch;
-    // Swift's resumeY covers coming back after a relaunch.
-    if (!samePage && current.path) {
-      scrollMemory.set(current.path, window.scrollY);
-      if (scrollMemory.size > 64) scrollMemory.delete(scrollMemory.keys().next().value);
-    }
-    let landingY = 0;
-    if (!samePage && payload.path) {
-      if (scrollMemory.has(payload.path)) {
-        landingY = scrollMemory.get(payload.path);
-      } else {
-        const resume = Number(payload.resumeY);
-        if (Number.isFinite(resume) && resume > 0) landingY = resume;
-      }
-    }
+    // Where the reader was in the document being left, and where to land in
+    // the one being opened. Session memory wins — it is exact for this
+    // launch; Swift's resumeY covers coming back after a relaunch.
+    if (!samePage) reading.depart(current.path);
+    const landingY = samePage ? 0 : reading.arrivalY(payload.path, payload.resumeY);
     // Reading position, read off the DOM before it is replaced.
-    const anchor = samePage ? captureReadingAnchor() : null;
+    const anchor = samePage ? reading.captureAnchor(elDoc) : null;
     // An arrival animation is for a *different* document, seen by someone —
     // the first render is not that, and neither is any render into a hidden
     // page. See the end of this function for why the visibility half matters.
@@ -588,7 +486,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       FORBID_ATTR: ["data-chrome"],
     });
 
-    if (anchor) restoreOpenDetails(anchor.open);
+    if (anchor) reading.restoreDetails(elDoc, anchor.open);
 
     if (split.fields.length && payload.showFrontmatter !== false) {
       const firstHeading = elDoc.querySelector("h1");
@@ -618,7 +516,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     const behavior = root.style.scrollBehavior;
     root.style.scrollBehavior = "auto";
     if (samePage) {
-      restoreReadingAnchor(anchor);
+      reading.restoreScroll(elDoc, anchor);
     } else {
       window.scrollTo(0, landingY);
     }
