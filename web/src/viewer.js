@@ -596,19 +596,22 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       if (header) elDoc.insertBefore(header, elDoc.firstChild);
     }
 
-    // Collecting figures for this render starts fresh; decorateCode below
-    // registers each ```mermaid block as it walks the DOM.
+    // Post-processing runs through this list, in this order. Each entry notes
+    // the constraint that pins its position; a new pass joins the list rather
+    // than growing render(). Everything before this point built the DOM;
+    // everything after reads it.
+    const passes = [
+      markChrome, // first: marks chrome (marked-footnote's heading) so later passes skip it
+      addHeadingAnchors,
+      decorateAlerts,
+      decorateCode, // hands ```mermaid blocks to diagrams.figure
+      wrapTables,
+      resolveLocalPaths, // after sanitize: returns scheme-carrying URLs untouched, trusting DOMPurify to have stripped javascript:
+      markTaskItems,
+      decorateImages, // last: measures final layout, for the lazy-loading decision
+    ];
     diagrams.reset();
-    markChrome(elDoc);
-    addHeadingAnchors(elDoc);
-    decorateAlerts(elDoc);
-    decorateCode(elDoc);
-    wrapTables(elDoc);
-    // Must stay after the sanitize above: resolveURL returns scheme-carrying
-    // hrefs unchanged, so DOMPurify is what removes `javascript:` ones.
-    resolveLocalPaths(elDoc);
-    markTaskItems(elDoc);
-    decorateImages(elDoc);
+    passes.forEach((pass) => pass(elDoc));
 
     // Restore position without animating there.
     const root = document.documentElement;
