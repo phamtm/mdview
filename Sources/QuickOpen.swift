@@ -27,8 +27,18 @@ struct QuickOpenPanel: View {
                 query: $query, palette: palette, onChange: { filter() },
                 onMove: moveSelection, onConfirm: confirm, onCancel: close
             )
+            .frame(height: 18)
             .padding(.horizontal, 13.8)
-            .padding(.vertical, 10)
+            .padding(.vertical, 11)
+            .overlay(alignment: .leading) {
+                if query.isEmpty {
+                    Text("Find a file by name")
+                        .font(Typeface.text(13))
+                        .foregroundStyle(palette.muted.opacity(0.7))
+                        .padding(.leading, 13.8)
+                        .allowsHitTesting(false)
+                }
+            }
 
             if !results.isEmpty {
                 Divider().overlay(palette.divider)
@@ -36,12 +46,17 @@ struct QuickOpenPanel: View {
                     ScrollView {
                         LazyVStack(spacing: 0, pinnedViews: []) {
                             ForEach(Array(results.enumerated()), id: \.element.id) { index, node in
-                                row(node, selected: index == selection)
-                                    .id(index)
-                                    .onTapGesture {
-                                        selection = index
-                                        confirm()
-                                    }
+                                // A Button, deliberately, not a tap gesture:
+                                // inside a ScrollView the pan recognizer wins
+                                // ties on macOS and taps land dead.
+                                Button {
+                                    selection = index
+                                    confirm()
+                                } label: {
+                                    row(node, selected: index == selection)
+                                }
+                                .buttonStyle(.plain)
+                                .id(index)
                             }
                         }
                         .padding(.vertical, 4)
@@ -236,15 +251,17 @@ struct QuickOpenPanel: View {
 
 /// The query field, with the four keys the palette lives by.
 ///
-/// SwiftUI's TextField cannot take the arrow keys without a focus dance, and
-/// this panel is nothing but arrows and return; an NSTextField says exactly
-/// what each key means — through its *delegate*, not a keyDown override,
-/// because while a field is being edited the keys are taken by the window's
-/// field editor (an NSTextView), and the field's own keyDown never runs. The
-/// field editor asks the delegate what to do about each editing command, and
-/// that is where Enter, the arrows and Escape get their meaning.
-/// `cancelOperation` also covers Escape when the field has lost focus, via
-/// the panel's onExitCommand.
+/// This is an NSTextView, not an NSTextField, and that is two rounds of
+/// education. An NSTextField's keys are taken by the window's field editor
+/// (an NSTextView), so a keyDown override on the field never runs; moving
+/// handling to `control:textView:doCommandBy:` caught Return but not the
+/// arrows, because NSTextView implements moveUp:/moveDown: itself and never
+/// asks the delegate about commands it owns.
+///
+/// So the palette brings its own editor. A one-line NSTextView *is* the first
+/// responder, its keyDown runs first, and every key means exactly what this
+/// panel says it means. The placeholder is drawn in SwiftUI behind it, since
+/// a bare text view has none.
 private struct QuickOpenField: NSViewRepresentable {
     @Binding var query: String
     let palette: Palette
@@ -253,75 +270,100 @@ private struct QuickOpenField: NSViewRepresentable {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
-        field.placeholderString = "Find a file by name"
-        field.font = NSFont(name: Typeface.body, size: 15) ?? .systemFont(ofSize: 15)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.delegate = context.coordinator
+    func makeNSView(context: Context) -> QuickOpenTextView {
+        let view = QuickOpenTextView()
+        // One line of plain text: no rich editing, no font panel, no scrolling,
+        // width tracking SwiftUI's frame.
+        view.isRichText = false
+        view.importsGraphics = false
+        view.usesFontPanel = false
+        view.allowsUndo = true
+        view.drawsBackground = false
+        view.focusRingType = .none
+        view.textContainerInset = .zero
+        view.isVerticallyResizable = false
+        view.isHorizontallyResizable = false
+        view.autoresizingMask = [.width]
+        view.textContainer?.widthTracksTextView = true
+        view.textContainer?.lineFragmentPadding = 0
+        view.font = NSFont(name: Typeface.body, size: 15) ?? .systemFont(ofSize: 15)
+        view.onMove = onMove
+        view.onConfirm = onConfirm
+        view.onCancel = onCancel
+        view.delegate = context.coordinator
         // Focus on arrival: the palette exists to be typed into.
-        DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
-        return field
+        DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
+        return view
     }
 
-    func updateNSView(_ field: NSTextField, context: Context) {
-        if field.stringValue != query { field.stringValue = query }
-        field.textColor = NSColor(palette.text)
+    func updateNSView(_ view: QuickOpenTextView, context: Context) {
+        // The closures are re-taken each pass so nothing reads a stale flag.
+        view.onMove = onMove
+        view.onConfirm = onConfirm
+        view.onCancel = onCancel
+        if view.string != query { view.string = query }
+        let colour = NSColor(palette.text)
+        if view.textColor != colour { view.textColor = colour }
+        if view.insertionPointColor != colour { view.insertionPointColor = colour }
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(
-            query: $query, onChange: onChange, onMove: onMove,
-            onConfirm: onConfirm, onCancel: onCancel)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(query: $query, onChange: onChange) }
 
-    final class Coordinator: NSObject, NSTextFieldDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate {
         private let query: Binding<String>
         private let onChange: () -> Void
-        private let onMove: (Int) -> Void
-        private let onConfirm: () -> Void
-        private let onCancel: () -> Void
 
-        init(
-            query: Binding<String>, onChange: @escaping () -> Void,
-            onMove: @escaping (Int) -> Void, onConfirm: @escaping () -> Void,
-            onCancel: @escaping () -> Void
-        ) {
+        init(query: Binding<String>, onChange: @escaping () -> Void) {
             self.query = query
             self.onChange = onChange
-            self.onMove = onMove
-            self.onConfirm = onConfirm
-            self.onCancel = onCancel
         }
 
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            query.wrappedValue = field.stringValue
+        func textDidChange(_ notification: Notification) {
+            guard let view = notification.object as? QuickOpenTextView else { return }
+            // Pasted text can carry newlines; this is a one-line field.
+            if view.string.contains(where: \.isNewline) {
+                view.string = view.string.replacingOccurrences(of: "\n", with: "")
+            }
+            query.wrappedValue = view.string
             onChange()
         }
+    }
+}
 
-        /// The palette's keys, as editing commands from the field editor.
-        func control(
-            _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
-        ) -> Bool {
-            switch commandSelector {
-            case #selector(NSStandardKeyBindingResponding.moveUp(_:)):
-                onMove(-1)
-                return true
-            case #selector(NSStandardKeyBindingResponding.moveDown(_:)):
-                onMove(1)
-                return true
-            case #selector(NSStandardKeyBindingResponding.insertNewline(_:)):
-                onConfirm()
-                return true
-            case #selector(NSStandardKeyBindingResponding.cancelOperation(_:)):
-                onCancel()
-                return true
-            default:
-                return false
-            }
+final class QuickOpenTextView: NSTextView {
+    var onMove: ((Int) -> Void)?
+    var onConfirm: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    /// We are the first responder here — no field editor in between — so this
+    /// runs for every key and the palette's four mean what they say.
+    override func keyDown(with event: NSEvent) {
+        switch event.specialKey {
+        case .upArrow:
+            onMove?(-1)
+            return
+        case .downArrow:
+            onMove?(1)
+            return
+        default:
+            break
         }
+        switch event.charactersIgnoringModifiers {
+        case "\r", "\u{3}":
+            onConfirm?()
+            return
+        case "\u{1b}":
+            onCancel?()
+            return
+        default:
+            break
+        }
+        super.keyDown(with: event)
+    }
+
+    /// Belt and braces for a command that arrived outside keyDown (an IME, a
+    /// menu): whatever happens, a newline must not enter a one-line field.
+    override func insertNewline(_ sender: Any?) {
+        onConfirm?()
     }
 }
