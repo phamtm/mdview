@@ -24,6 +24,7 @@ struct ViewerView: View {
     @State private var pageInputFocused = false
     @AppStorage("outlineVisible") private var outlineVisible = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("sidebarWidthMigrated") private var widthMigrated = false
 
     // Layout zones, from the design: a 52pt titlebar band across the top, split
@@ -156,7 +157,13 @@ struct ViewerView: View {
         .overlay(alignment: .top) {
             if showQuickOpen {
                 ZStack(alignment: .top) {
-                    Color.clear
+                    // A breath of ink between reader and page: enough to give
+                    // the panel's fade contrast against busy text and mark the
+                    // shift into command mode, not enough to hide the document.
+                    // Fades in with the panel, since it lives inside the same
+                    // transition; click-through dismisses.
+                    Rectangle()
+                        .fill(Color.black.opacity(colorScheme == .dark ? 0.22 : 0.08))
                         .contentShape(Rectangle())
                         .onTapGesture { showQuickOpen = false }
                     QuickOpenPanel(
@@ -165,7 +172,11 @@ struct ViewerView: View {
                     )
                     .padding(.top, 84)
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                // Fade, and nothing else. The first cut combined opacity with
+                // a drop from the window's top edge, which read as an object
+                // sliding in rather than a surface appearing — movement is
+                // for things that travel, and an overlay does not travel.
+                .transition(.opacity)
             }
         }
         // Everything in Shortcuts.all that is not a menu item. The closure is
@@ -241,9 +252,28 @@ struct ViewerView: View {
         //
         // Keyed on the two flags alone: dragging a seam writes `sidebarWidth`
         // continuously, and animating *that* would make the drag lag the pointer.
-        .animation(.easeOut(duration: 0.2), value: sidebarVisible)
-        .animation(.easeOut(duration: 0.2), value: outlineVisible)
-        .animation(.easeOut(duration: 0.18), value: showQuickOpen)
+        .animation(panelAnimation, value: sidebarVisible)
+        .animation(panelAnimation, value: outlineVisible)
+        .animation(overlayAnimation, value: showQuickOpen)
+        .animation(overlayAnimation, value: showSettings)
+        .animation(overlayAnimation, value: showShortcuts)
+        .animation(overlayAnimation, value: showFrontmatter)
+    }
+
+    // --- how the chrome moves ---------------------------------------------------
+
+    /// The panels' slide. `nil` under reduce motion — the same contract the page
+    /// keeps (web/src/motion.js): the system asked for stillness, so everything
+    /// lands in place at once.
+    private var panelAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.2)
+    }
+
+    /// Overlays fade, and that is all they do. One curve for arrival and exit:
+    /// threading an asymmetric one would mean wrapping every dismissal path in
+    /// its own transaction for a difference no one feels at this length.
+    private var overlayAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.16)
     }
 
     // A panel is capped by what the window can spare: the other panel, plus the
