@@ -79,7 +79,6 @@ struct QuickOpenPanel: View {
         files = workspace.allFiles()
         filter()
     }
-
     /// Recents when there is nothing typed; fuzzy matches, best first, after.
     /// Ranked results are capped — a reader narrows the query rather than
     /// scrolling a list of two hundred.
@@ -105,7 +104,10 @@ struct QuickOpenPanel: View {
 
         var scored: [(Int, FileNode)] = []
         for node in files {
-            if let points = score(query: needle, path: node.url.path, name: node.name), points > 0 {
+            let folder = node.url.deletingLastPathComponent().lastPathComponent
+            if let points = score(query: needle, name: node.name, folder: folder),
+                points > 0
+            {
                 scored.append((points, node))
             }
         }
@@ -118,27 +120,56 @@ struct QuickOpenPanel: View {
     }
 
     /**
-     * Subsequence match over the full path, scored so what the reader means wins.
+     * Ranks one file against the query: every whitespace-separated term must
+     * land in the file's *name*, falling back to its immediate folder only for
+     * terms the name does not carry.
      *
-     * Matching the path rather than the name alone lets a folder narrow the
-     * field (`notes api` finds notes/api.md); the name's hits weigh more than
-     * the folders', so a filename match beats a distant directory that merely
-     * contains the letters. Contiguous runs beat scattered letters, word starts
-     * beat word middles, and shorter paths break ties — `README.md` outranks
-     * `vendor/lib/README.md`.
+     * The first version matched scattered letters across the absolute path,
+     * and `/Users/minh/…` carried enough vowels that almost nothing was ruled
+     * out — typing a filename barely narrowed the list. Matching now starts
+     * from what the reader actually types (the file's name), with the folder
+     * as the secondary signal, so `notes api` still finds notes/api.md while
+     * `readme` can no longer match half the library through its home prefix.
      */
-    private func score(query: String, path: String, name: String) -> Int? {
-        let haystack = Array(path.lowercased())
-        let needle = Array(query.lowercased())
-        let nameStart = path.count - name.count
+    private func score(query: String, name: String, folder: String) -> Int? {
+        let terms = query.split(whereSeparator: \.isWhitespace)
+        guard !terms.isEmpty else { return nil }
 
+        var total = 0
+        for term in terms {
+            let lowered = Array(term.lowercased())
+            if let inName = subsequenceScore(lowered, in: name.lowercased()) {
+                total += inName * 10
+                continue
+            }
+            // A folder hit narrows the field but must never outrank a file
+            // whose own name matched.
+            guard let inFolder = subsequenceScore(lowered, in: folder.lowercased()) else {
+                return nil
+            }
+            total += inFolder * 3
+        }
+        // Shorter names win ties.
+        return total - name.count / 4
+    }
+
+    /**
+     * How well `needle` fits into `haystack` as an unordered-in-advance
+     * subsequence: every letter in order, nothing required between them.
+     *
+     * Contiguous runs beat scattered letters (a growing bonus per letter in
+     * the run), letters after a separator or at the front beat word middles,
+     * and anything short of a full subsequence returns nil — no match.
+     */
+    private func subsequenceScore(_ needle: [Character], in haystack: String) -> Int? {
+        let hay = Array(haystack)
         var total = 0
         var searchFrom = 0
         var runBonus = 0
         for character in needle {
             // firstIndex on the slice reports absolute positions — slices keep
             // their parent's indices.
-            guard let at = haystack[searchFrom...].firstIndex(of: character) else { return nil }
+            guard let at = hay[searchFrom...].firstIndex(of: character) else { return nil }
             var gained = 1
             if at == searchFrom, total > 0 {
                 gained += 4  // contiguous with the previous letter
@@ -147,19 +178,14 @@ struct QuickOpenPanel: View {
             } else {
                 runBonus = 0
             }
-            if at == 0 || "/ ._-".contains(haystack[at - 1]) {
+            if at == 0 || " ._-".contains(hay[at - 1]) {
                 gained += 3  // a word start
-            }
-            if at >= nameStart {
-                gained += 6  // in the file's own name
             }
             total += gained
             searchFrom = at + 1
         }
-        // Shorter paths win ties, and a match spread over a long path decays.
-        return total * 8 - path.count / 4
+        return total
     }
-
     // MARK: Keys
 
     private func moveSelection(_ delta: Int) {
@@ -211,10 +237,14 @@ struct QuickOpenPanel: View {
 /// The query field, with the four keys the palette lives by.
 ///
 /// SwiftUI's TextField cannot take the arrow keys without a focus dance, and
-/// this panel is nothing but arrows and return; an NSTextField subclass says
-/// exactly what each key means. While the field holds focus the app's own plain
-/// keys stand down (`KeyContext.isEditingText`), so `j` types a letter here
-/// instead of turning the page underneath.
+/// this panel is nothing but arrows and return; an NSTextField says exactly
+/// what each key means — through its *delegate*, not a keyDown override,
+/// because while a field is being edited the keys are taken by the window's
+/// field editor (an NSTextView), and the field's own keyDown never runs. The
+/// field editor asks the delegate what to do about each editing command, and
+/// that is where Enter, the arrows and Escape get their meaning.
+/// `cancelOperation` also covers Escape when the field has lost focus, via
+/// the panel's onExitCommand.
 private struct QuickOpenField: NSViewRepresentable {
     @Binding var query: String
     let palette: Palette
@@ -223,35 +253,47 @@ private struct QuickOpenField: NSViewRepresentable {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    func makeNSView(context: Context) -> QuickOpenTextField {
-        let field = QuickOpenTextField()
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
         field.placeholderString = "Find a file by name"
         field.font = NSFont(name: Typeface.body, size: 15) ?? .systemFont(ofSize: 15)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.delegate = context.coordinator
-        field.onMove = onMove
-        field.onConfirm = onConfirm
-        field.onCancel = onCancel
         // Focus on arrival: the palette exists to be typed into.
         DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
         return field
     }
 
-    func updateNSView(_ field: QuickOpenTextField, context: Context) {
+    func updateNSView(_ field: NSTextField, context: Context) {
         if field.stringValue != query { field.stringValue = query }
         field.textColor = NSColor(palette.text)
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(query: $query, onChange: onChange) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            query: $query, onChange: onChange, onMove: onMove,
+            onConfirm: onConfirm, onCancel: onCancel)
+    }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         private let query: Binding<String>
         private let onChange: () -> Void
-        init(query: Binding<String>, onChange: @escaping () -> Void) {
+        private let onMove: (Int) -> Void
+        private let onConfirm: () -> Void
+        private let onCancel: () -> Void
+
+        init(
+            query: Binding<String>, onChange: @escaping () -> Void,
+            onMove: @escaping (Int) -> Void, onConfirm: @escaping () -> Void,
+            onCancel: @escaping () -> Void
+        ) {
             self.query = query
             self.onChange = onChange
+            self.onMove = onMove
+            self.onConfirm = onConfirm
+            self.onCancel = onCancel
         }
 
         func controlTextDidChange(_ notification: Notification) {
@@ -259,23 +301,26 @@ private struct QuickOpenField: NSViewRepresentable {
             query.wrappedValue = field.stringValue
             onChange()
         }
-    }
-}
 
-final class QuickOpenTextField: NSTextField {
-    var onMove: ((Int) -> Void)?
-    var onConfirm: (() -> Void)?
-    var onCancel: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        switch event.specialKey {
-        case .upArrow: onMove?(-1)
-        case .downArrow: onMove?(1)
-        default:
-            switch event.charactersIgnoringModifiers {
-            case "\r", "\u{3}": onConfirm?()
-            case "\u{1b}": onCancel?()
-            default: super.keyDown(with: event)
+        /// The palette's keys, as editing commands from the field editor.
+        func control(
+            _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
+        ) -> Bool {
+            switch commandSelector {
+            case #selector(NSStandardKeyBindingResponding.moveUp(_:)):
+                onMove(-1)
+                return true
+            case #selector(NSStandardKeyBindingResponding.moveDown(_:)):
+                onMove(1)
+                return true
+            case #selector(NSStandardKeyBindingResponding.insertNewline(_:)):
+                onConfirm()
+                return true
+            case #selector(NSStandardKeyBindingResponding.cancelOperation(_:)):
+                onCancel()
+                return true
+            default:
+                return false
             }
         }
     }
