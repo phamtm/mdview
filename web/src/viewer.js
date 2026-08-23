@@ -9,6 +9,8 @@ import DOMPurify from "dompurify";
 import { createRail } from "./rail.js";
 import { countWords, frontmatterHeader, panelFields, splitFrontmatter } from "./frontmatter.js";
 import { createFindBar } from "./find.js";
+import { createDiagrams } from "./diagrams.js";
+import { escapeHtml } from "./util.js";
 import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
 
 (function () {
@@ -27,8 +29,7 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   let current = { path: "", dir: "" };
   let renderToken = 0; // guards async mermaid work against a newer render
   let appliedFormat = ""; // which parser the last render used, for the tests
-  let diagramPass = 0; // unique ids per mermaid draw pass
-  let diagrams = []; // {el, code} for the document on screen
+  const diagrams = createDiagrams();
 
   // Where the reader was in each document this session, by path. A document
   // left and come back to reopens where it was left — pixel-exact, because it
@@ -110,15 +111,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
   marked.use(markedFootnote());
 
   // --- helpers --------------------------------------------------------------
-
-  const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  function escapeHtml(s) {
-    return s.replace(
-      /[&<>"]/g,
-      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]
-    );
-  }
 
   function encodeSegments(path) {
     return path
@@ -239,35 +231,18 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     });
   }
 
-  /** Wrap code blocks in a figure, highlight them, pull out mermaid sources. */
+  /**
+   * Wrap code blocks in a figure, highlight them, and hand ```mermaid blocks
+   * to the diagrams module, which swaps in a figure of its own.
+   */
   function decorateCode(root) {
-    const diagrams = [];
     root.querySelectorAll("pre > code").forEach((code) => {
       const pre = code.parentElement;
       const lang = (code.className.match(/language-([\w+#.\-]+)/) || [, ""])[1];
       const source = code.textContent || "";
 
       if (lang === "mermaid") {
-        const figure = document.createElement("figure");
-        figure.className = "diagram";
-        const caption = document.createElement("figcaption");
-        const label = document.createElement("span");
-        label.className = "lang";
-        label.setAttribute("data-chrome", "");
-        label.textContent = "mermaid";
-        caption.appendChild(label);
-        const holder = document.createElement("div");
-        holder.className = "mermaid";
-        // Reserved until the SVG lands, which is asynchronous: without it the
-        // rest of the document jumps down by a diagram's height mid-read.
-        holder.style.minHeight = "80px";
-        // The fade-in is skipped on a hidden page: CSS animation clocks do not
-        // tick there, so the SVG would freeze at opacity 0. See render().
-        holder.classList.toggle("fade", !document.hidden);
-        figure.appendChild(caption);
-        figure.appendChild(holder);
-        pre.replaceWith(figure);
-        diagrams.push({ el: holder, code: source });
+        pre.replaceWith(diagrams.figure(source));
         return;
       }
 
@@ -314,7 +289,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
         }
       }
     });
-    return diagrams;
   }
 
   function wrapTables(root) {
@@ -433,193 +407,6 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       // A broken picture must not sit invisible forever: show whatever WebKit
       // draws for it.
       img.addEventListener("error", () => img.classList.remove("pending"), { once: true });
-    });
-  }
-
-  // --- mermaid (loaded only when a document actually uses it) --------------
-
-  let mermaidReady = null;
-
-  function ensureMermaid() {
-    if (mermaidReady) return mermaidReady;
-    mermaidReady = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "mermaid.js";
-      s.onload = resolve;
-      s.onerror = () => reject(new Error("could not load mermaid"));
-      document.head.appendChild(s);
-    });
-    return mermaidReady;
-  }
-
-  async function drawDiagrams(token) {
-    if (!diagrams.length) return;
-    const pass = ++diagramPass;
-    try {
-      await ensureMermaid();
-    } catch (e) {
-      diagrams.forEach((d) => {
-        d.el.className = "error";
-        d.el.textContent = e.message;
-      });
-      return;
-    }
-    if (token !== renderToken) return;
-    // Drive mermaid from the document's own palette so diagrams don't look
-    // like they came from a different app.
-    const css = getComputedStyle(document.body);
-    const cssVar = (name) => css.getPropertyValue(name).trim();
-    const palette = readPalette();
-    const { accent, text, surface, divider } = palette;
-    try {
-      window.mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        theme: "base",
-        fontFamily: css.fontFamily,
-        flowchart: { curve: "basis", padding: 10, nodeSpacing: 34, rankSpacing: 46 },
-        themeVariables: {
-          darkMode: isDark(),
-          background: "transparent",
-          primaryColor: surface,
-          primaryTextColor: text,
-          primaryBorderColor: accent,
-          secondaryColor: surface,
-          tertiaryColor: surface,
-          lineColor: accent,
-          textColor: text,
-          nodeBorder: accent,
-          clusterBorder: divider,
-          edgeLabelBackground: "transparent",
-          fontSize: "13px",
-        },
-      });
-    } catch (error) {
-      // Never fail silently: a bad token kills every diagram in one go.
-      diagrams.forEach((d) => {
-        d.el.innerHTML =
-          '<div class="error">Mermaid setup: ' +
-          escapeHtml(String((error && error.message) || error)) +
-          "</div>";
-      });
-      return;
-    }
-    for (let i = 0; i < diagrams.length; i++) {
-      if (token !== renderToken) return;
-      const d = diagrams[i];
-      try {
-        const out = await window.mermaid.render("mmd-" + pass + "-" + i, d.code);
-        if (token !== renderToken) return;
-        d.el.innerHTML = out.svg;
-        tintDiagram(d.el, palette);
-      } catch (e) {
-        d.el.innerHTML =
-          '<div class="error">Mermaid: ' + escapeHtml(String((e && e.message) || e)) + "</div>";
-      }
-    }
-    // Diagrams change the height of the page, so the outline's offsets are stale.
-    // Same decision as the first call: re-reading unconditionally would give an
-    // HTML document the outline it was just denied.
-    if (token === renderToken) rail.update(elDoc, appliedFormat !== "html");
-  }
-
-  /**
-   * Resolve the theme tokens to plain opaque rgb() strings for mermaid.
-   *
-   * Two things get in the way. getComputedStyle leaves color-mix() unresolved,
-   * and the Vellum and Colophon themes are built from it; and once resolved,
-   * WebKit reports colours as `color(srgb …)`, which mermaid's colour parser
-   * rejects outright. So each token is painted onto a 1×1 canvas over the page
-   * background and read back as bytes — which also flattens the semi-transparent
-   * tokens into what the reader actually sees.
-   */
-  function readPalette() {
-    const probe = document.createElement("span");
-    probe.style.display = "none";
-    document.body.appendChild(probe);
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-    const computed = (token) => {
-      probe.style.color = "";
-      probe.style.color = `var(${token})`;
-      return getComputedStyle(probe).color;
-    };
-
-    const flatten = (token, base, fallback) => {
-      const value = computed(token);
-      if (!value || !ctx) return fallback;
-      ctx.clearRect(0, 0, 1, 1);
-      if (base) {
-        ctx.fillStyle = base;
-        ctx.fillRect(0, 0, 1, 1);
-      }
-      ctx.fillStyle = value;
-      ctx.fillRect(0, 0, 1, 1);
-      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-      return a === 0 ? fallback : `rgb(${r}, ${g}, ${b})`;
-    };
-
-    const bg = flatten("--bg", "#ffffff", "#f8f4f4");
-    const palette = {
-      bg,
-      accent: flatten("--accent", bg, "#c28d41"),
-      text: flatten("--text", bg, "#2d2b2b"),
-      surface: flatten("--surface", bg, "#eae7e7"),
-      divider: flatten("--divider", bg, "#d7d3d3"),
-    };
-    probe.remove();
-    return palette;
-  }
-
-  /**
-   * Mermaid bakes colours into its SVG. The design wants nodes drawn as stroke
-   * on nothing — no fills — so the output is repainted from the tokens.
-   */
-  function tintDiagram(host, palette) {
-    const svg = host.querySelector("svg");
-    if (!svg) return;
-    svg.removeAttribute("height");
-    svg.style.maxWidth = "100%";
-    svg.style.height = "auto";
-    host.style.minHeight = "";
-
-    const accent = palette.accent;
-    const text = palette.text;
-
-    host.querySelectorAll(".node rect, .node path, .node polygon, .node circle").forEach((el) => {
-      el.setAttribute("rx", "4");
-      el.setAttribute("ry", "4");
-      el.style.fill = "transparent";
-      el.style.stroke = accent;
-      el.style.strokeWidth = "1px";
-    });
-    host
-      .querySelectorAll(
-        ".nodeLabel, .nodeLabel *, .node foreignObject div, .node text, .node tspan"
-      )
-      .forEach((el) => {
-        el.style.color = text;
-        el.style.fill = text;
-        el.style.background = "transparent";
-      });
-    host.querySelectorAll(".edgePath path, .flowchart-link, .edgePaths path").forEach((el) => {
-      el.style.stroke = accent;
-      el.style.fill = "none";
-    });
-    host.querySelectorAll("marker path, marker polygon, .arrowheadPath").forEach((el) => {
-      el.style.fill = accent;
-      el.style.stroke = accent;
-    });
-    host.querySelectorAll(".edgeLabel, .edgeLabel *").forEach((el) => {
-      el.style.background = "transparent";
-      el.style.backgroundColor = "transparent";
-      el.style.color = text;
-      el.style.fill = text;
-      el.style.fontStyle = "italic";
-      el.style.fontSize = "11.5px";
     });
   }
 
@@ -809,10 +596,13 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
       if (header) elDoc.insertBefore(header, elDoc.firstChild);
     }
 
+    // Collecting figures for this render starts fresh; decorateCode below
+    // registers each ```mermaid block as it walks the DOM.
+    diagrams.reset();
     markChrome(elDoc);
     addHeadingAnchors(elDoc);
     decorateAlerts(elDoc);
-    diagrams = decorateCode(elDoc);
+    decorateCode(elDoc);
     wrapTables(elDoc);
     // Must stay after the sanitize above: resolveURL returns scheme-carrying
     // hrefs unchanged, so DOMPurify is what removes `javascript:` ones.
@@ -862,7 +652,14 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     rail.update(elDoc, !isHtml);
     // The find bar's ranges point into the document that was just replaced.
     find.refresh();
-    drawDiagrams(token);
+    // Diagrams draw asynchronously; when the last one lands (still current)
+    // the module calls onSettled, which re-reads the outline — a diagram
+    // changes the height of the page, so the offsets above go stale. Same
+    // gating as the synchronous call: no outline for an HTML file.
+    diagrams.draw({
+      isCurrent: () => token === renderToken,
+      onSettled: () => rail.update(elDoc, !isHtml),
+    });
   }
 
   // --- focus, so the app knows when a keystroke is ours ----------------------
@@ -971,7 +768,11 @@ import { KEYBOARD_SCROLL_BEHAVIOR } from "./motion.js";
     },
     /** Called by the app when the system appearance changes. */
     refreshDiagrams() {
-      if (diagrams.length) drawDiagrams(renderToken);
+      const token = renderToken;
+      diagrams.draw({
+        isCurrent: () => token === renderToken,
+        onSettled: () => rail.update(elDoc, appliedFormat !== "html"),
+      });
     },
   };
 })();

@@ -58,7 +58,10 @@ npm run watch             # rebuild on save, then ⌥⌘R in the app
 | `web/src/find.js` | The find bar. Matches are custom highlights, never the selection |
 | `web/src/frontmatter.js` | The frontmatter split, the document's head, the word count |
 | `web/src/rail.js` | The tick rail beside the column, and it posts the outline to the app |
+| `web/src/diagrams.js` | Mermaid: figures, on-demand library load, palette-matched drawing |
+| `web/src/reading-position.js` | Where the reader is: anchors, per-file memory, reporting to Swift |
 | `web/src/motion.js` | One constant: keyboard scrolling jumps, mouse-driven jumps animate |
+| `web/src/util.js` | Tiny shared helpers (`escapeHtml`) |
 | `web/src/mermaid.js` | Diagram entry point, built as its own file |
 | `web/build.mjs` | esbuild config for the two bundles |
 | `Resources/bundle.js` | **Generated.** Don't edit |
